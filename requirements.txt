@@ -7,3 +7,4 @@ daphne
 channels
 djangorestframework-simplejwt
 django-filter
+gunicorn
