@@ -4,3 +4,6 @@ django-cors-headers
 mysqlclient
 python-decouple
 daphne
+channels
+djangorestframework-simplejwt
+django-filter
