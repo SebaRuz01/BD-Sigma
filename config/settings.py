@@ -28,12 +28,7 @@ DEBUG = env('DEBUG', default=True, cast=bool)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "bd-sigma-production.up.railway.app",
-    "localhost",
-    "127.0.0.1",
-    ".railway.app", 
-]
+ALLOWED_HOSTS = ['*']
 
 AUTH_USER_MODEL = 'core.Usuario'
 
