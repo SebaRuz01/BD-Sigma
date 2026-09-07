@@ -146,6 +146,8 @@ MAILERS = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://misigma.infinityfree.me",
+    "https://misigma.infinityfree.me",
 ]
 
 REST_FRAMEWORK = {
