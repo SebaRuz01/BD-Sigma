@@ -1,4 +1,3 @@
-import os
 """
 Django settings for config project.
 
@@ -94,11 +93,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': env('MYSQL_DATABASE'),
-        'USER': env('MYSQL_USER'),
-        'PASSWORD': env('MYSQL_PASSWORD'),
-        'HOST': env('MYSQL_HOST'),
-        'PORT': env('MYSQL_PORT'),
+        'NAME': 'railway',
+        'USER': 'root',
+        'PASSWORD': 'COLdentyWAcjMZhvxcIqJZuBJdUBrFtx',
+        'HOST': 'mysql.railway.internal',
+        'PORT': '3306',
     }
 }
 
