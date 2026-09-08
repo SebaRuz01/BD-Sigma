@@ -1,10 +1,11 @@
 django
-djangorestframework
 django-cors-headers
-mysqlclient
+gunicorn
+psycopg2-binary
+dj-database-url
 python-decouple
-daphne
-channels
+djangorestframework
 djangorestframework-simplejwt
 django-filter
-gunicorn
+daphne
+channels
