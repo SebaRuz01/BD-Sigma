@@ -9,3 +9,4 @@ djangorestframework-simplejwt
 django-filter
 daphne
 channels
+resend
