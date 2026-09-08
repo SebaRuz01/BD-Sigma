@@ -95,6 +95,7 @@ class OrdenTrabajo(models.Model):
     codigo_seguimiento = models.CharField(max_length=12, unique=True, editable=False, blank=True)
     tecnico = models.ForeignKey(Tecnico, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
     cliente_nombre = models.CharField(max_length=150)
+    cliente_email = models.EmailField(blank=True, null=True)  # <-- AGREGA ESTA LÍNEA
     cliente_telefono = models.CharField(max_length=30, blank=True)
     equipo = models.CharField(max_length=150)
     descripcion_problema = models.TextField(blank=True)
@@ -102,6 +103,14 @@ class OrdenTrabajo(models.Model):
     fecha_recepcion = models.DateTimeField(auto_now_add=True)
     fecha_estimada = models.DateTimeField(null=True, blank=True)
     fecha_entrega = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"OT-{self.id} — {self.equipo} ({self.estado})"
+
+    def save(self, *args, **kwargs):
+        if not self.codigo_seguimiento:
+            self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"OT-{self.id} — {self.equipo} ({self.estado})"
