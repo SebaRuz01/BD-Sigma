@@ -119,7 +119,34 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id)
 
     def perform_create(self, serializer):
-        serializer.save(taller_id=self.request.user.taller_id)
+        orden = serializer.save(taller_id=self.request.user.taller_id)
+        
+        # Enviar correo al crear la orden si tiene email registrado
+        if orden.cliente_email:
+            try:
+                url = "https://api.brevo.com/v3/smtp/email"
+                headers = {
+                    "accept": "application/json",
+                    "api-key": os.environ.get("BREVO_API_KEY"),
+                    "content-type": "application/json"
+                }
+                payload = {
+                    "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
+                    "to": [{"email": orden.cliente_email}],
+                    "subject": f"Orden de trabajo creada - Código: {orden.codigo_seguimiento}",
+                    "htmlContent": f"""
+                        <p>Hola <strong>{orden.cliente_nombre}</strong>,</p>
+                        <p>Hemos registrado tu equipo/vehículo (<strong>{orden.equipo}</strong>) en nuestro taller.</p>
+                        <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
+                    """
+                }
+                response = requests.post(url, json=payload, headers=headers)
+                if response.status_code == 201:
+                    print(f"Correo de creación enviado a {orden.cliente_email}")
+                else:
+                    print(f"Error Brevo al crear orden: {response.text}")
+            except Exception as e:
+                print(f"Excepción al conectar con Brevo (creación): {e}")
 
     def perform_update(self, serializer):
         instancia_antigua = self.get_object()
@@ -129,7 +156,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         
         # Si el estado cambió y el cliente tiene correo registrado
         if estado_anterior != orden_actualizada.estado:
-            if hasattr(orden_actualizada, 'cliente_email') and orden_actualizada.cliente_email:
+            if orden_actualizada.cliente_email:
                 try:
                     url = "https://api.brevo.com/v3/smtp/email"
                     headers = {
@@ -142,7 +169,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "to": [{"email": orden_actualizada.cliente_email}],
                         "subject": f"Actualización de tu vehículo - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
-                            <p>Hola, el estado de tu vehículo ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
+                            <p>Hola <strong>{orden_actualizada.cliente_nombre}</strong>,</p>
+                            <p>El estado de tu vehículo ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
                             <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
                         """
                     }
