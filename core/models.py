@@ -77,6 +77,11 @@ class Repuesto(models.Model):
     stock_actual = models.PositiveIntegerField(default=0)
     stock_minimo = models.PositiveIntegerField(default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Nuevos campos agregados
+    anio = models.IntegerField(null=True, blank=True)
+    modelo = models.CharField(max_length=100, null=True, blank=True)
+    compatibilidades = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.nombre} ({self.taller})"
@@ -95,7 +100,7 @@ class OrdenTrabajo(models.Model):
     codigo_seguimiento = models.CharField(max_length=12, unique=True, editable=False, blank=True)
     tecnico = models.ForeignKey(Tecnico, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
     cliente_nombre = models.CharField(max_length=150)
-    cliente_email = models.EmailField(blank=True, null=True)  # <-- AGREGA ESTA LÍNEA
+    cliente_email = models.EmailField(blank=True, null=True)
     cliente_telefono = models.CharField(max_length=30, blank=True)
     equipo = models.CharField(max_length=150)
     descripcion_problema = models.TextField(blank=True)
@@ -111,15 +116,6 @@ class OrdenTrabajo(models.Model):
         if not self.codigo_seguimiento:
             self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
         super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"OT-{self.id} — {self.equipo} ({self.estado})"
-
-    def save(self, *args, **kwargs):
-        if not self.codigo_seguimiento:
-            self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
-        super().save(*args, **kwargs)
-    
 
 
 class OrdenRepuesto(models.Model):
