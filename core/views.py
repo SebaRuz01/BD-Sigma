@@ -1,6 +1,7 @@
+import os
+import requests
 from rest_framework import viewsets, permissions
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -126,22 +127,32 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
         orden_actualizada = serializer.save()
         
+        # Si el estado cambió y el cliente tiene correo registrado
         if estado_anterior != orden_actualizada.estado:
             if hasattr(orden_actualizada, 'cliente_email') and orden_actualizada.cliente_email:
                 try:
-                    send_mail(
-                        subject=f"Actualización de tu vehículo - Orden {orden_actualizada.codigo_seguimiento}",
-                        message=(
-                            f"Hola, el estado de tu vehículo ha cambiado a: {orden_actualizada.estado}.\n\n"
-                            f"Puedes revisar el progreso en tiempo real usando tu código de seguimiento: {orden_actualizada.codigo_seguimiento}"
-                        ),
-                        from_email=None,
-                        recipient_list=[orden_actualizada.cliente_email],
-                        fail_silently=False,
-                    )
-                    print(f"Correo enviado exitosamente a {orden_actualizada.cliente_email} con el código {orden_actualizada.codigo_seguimiento}")
+                    url = "https://api.brevo.com/v3/smtp/email"
+                    headers = {
+                        "accept": "application/json",
+                        "api-key": os.environ.get("BREVO_API_KEY"),
+                        "content-type": "application/json"
+                    }
+                    payload = {
+                        "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
+                        "to": [{"email": orden_actualizada.cliente_email}],
+                        "subject": f"Actualización de tu vehículo - Orden {orden_actualizada.codigo_seguimiento}",
+                        "htmlContent": f"""
+                            <p>Hola, el estado de tu vehículo ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
+                            <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
+                        """
+                    }
+                    response = requests.post(url, json=payload, headers=headers)
+                    if response.status_code == 201:
+                        print(f"Correo enviado exitosamente vía Brevo a {orden_actualizada.cliente_email}")
+                    else:
+                        print(f"Error de Brevo al enviar correo: {response.text}")
                 except Exception as e:
-                    print(f"Error al enviar correo automático: {e}")
+                    print(f"Excepción al conectar con Brevo: {e}")
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
