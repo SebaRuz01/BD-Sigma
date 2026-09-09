@@ -34,15 +34,23 @@ class OrdenRepuestoViewSet(viewsets.ModelViewSet):
         return OrdenRepuesto.objects.filter(orden__taller_id=usuario.taller_id)
 
     def perform_create(self, serializer):
+        orden = serializer.validated_data['orden']
         repuesto = serializer.validated_data['repuesto']
-        cantidad = serializer.validated_data['cantidad']
+        cantidad = int(serializer.validated_data.get('cantidad', 1))
 
         if repuesto.stock_actual < cantidad:
             raise ValidationError(f'Stock insuficiente. Disponible: {repuesto.stock_actual}')
 
+        orden_repuesto_existente = OrdenRepuesto.objects.filter(orden=orden, repuesto=repuesto).first()
+
+        if orden_repuesto_existente:
+            orden_repuesto_existente.cantidad += cantidad
+            orden_repuesto_existente.save()
+        else:
+            serializer.save()
+
         repuesto.stock_actual -= cantidad
         repuesto.save()
-        serializer.save()
 
     def perform_destroy(self, instance):
         instance.repuesto.stock_actual += instance.cantidad
