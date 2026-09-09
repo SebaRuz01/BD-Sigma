@@ -121,7 +121,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         orden = serializer.save(taller_id=self.request.user.taller_id)
         
-        # Enviar correo al crear la orden si tiene email registrado
+        # Enviar correo al crear la orden indicando el taller
         if orden.cliente_email:
             try:
                 url = "https://api.brevo.com/v3/smtp/email"
@@ -130,13 +130,14 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     "api-key": os.environ.get("BREVO_API_KEY"),
                     "content-type": "application/json"
                 }
+                nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
                     "to": [{"email": orden.cliente_email}],
-                    "subject": f"Orden de trabajo creada - Código: {orden.codigo_seguimiento}",
+                    "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
                         <p>Hola <strong>{orden.cliente_nombre}</strong>,</p>
-                        <p>Hemos registrado tu equipo/vehículo (<strong>{orden.equipo}</strong>) en nuestro taller.</p>
+                        <p>Hemos registrado tu equipo/vehículo (<strong>{orden.equipo}</strong>) en <strong>{nombre_taller}</strong>.</p>
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
@@ -164,13 +165,14 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "api-key": os.environ.get("BREVO_API_KEY"),
                         "content-type": "application/json"
                     }
+                    nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     payload = {
                         "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
                         "to": [{"email": orden_actualizada.cliente_email}],
-                        "subject": f"Actualización de tu vehículo - Orden {orden_actualizada.codigo_seguimiento}",
+                        "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
                             <p>Hola <strong>{orden_actualizada.cliente_nombre}</strong>,</p>
-                            <p>El estado de tu vehículo ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
+                            <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
                             <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
                         """
                     }
