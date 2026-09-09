@@ -21,6 +21,7 @@ from .serializers import (
 )
 
 class OrdenRepuestoViewSet(viewsets.ModelViewSet):
+    queryset = OrdenRepuesto.objects.all()
     serializer_class = OrdenRepuestoSerializer
     permission_classes = [IsAuthenticated, TieneModuloActivo]
     modulo_requerido = 'ordenes'
@@ -43,7 +44,6 @@ class OrdenRepuestoViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        # si se quita un repuesto de una orden, se devuelve el stock
         instance.repuesto.stock_actual += instance.cantidad
         instance.repuesto.save()
         instance.delete()
@@ -121,14 +121,11 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         serializer.save(taller_id=self.request.user.taller_id)
 
     def perform_update(self, serializer):
-        # Capturamos el estado anterior para comparar si realmente cambió (opcional pero recomendado)
         instancia_antigua = self.get_object()
         estado_anterior = instancia_antigua.estado
 
-        # Guardamos la orden actualizada
         orden_actualizada = serializer.save()
         
-        # Si el estado cambió y el cliente tiene correo registrado
         if estado_anterior != orden_actualizada.estado:
             if hasattr(orden_actualizada, 'cliente_email') and orden_actualizada.cliente_email:
                 try:
@@ -138,7 +135,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                             f"Hola, el estado de tu vehículo ha cambiado a: {orden_actualizada.estado}.\n\n"
                             f"Puedes revisar el progreso en tiempo real usando tu código de seguimiento: {orden_actualizada.codigo_seguimiento}"
                         ),
-                        from_email=None,  # Utiliza automáticamente tu DEFAULT_FROM_EMAIL de Gmail configurado en settings.py
+                        from_email=None,
                         recipient_list=[orden_actualizada.cliente_email],
                         fail_silently=False,
                     )
