@@ -134,12 +134,12 @@ STATIC_URL = 'static/'
 
 # Email (Configurado para usar Resend vía SMTP de forma nativa en Django)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.resend.com'
+EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'resend'
-EMAIL_HOST_PASSWORD = env('RESEND_API_KEY', default='')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='onboarding@resend.dev')
+EMAIL_HOST_USER = 'sebaruz2004@gmail.com' 
+EMAIL_HOST_PASSWORD = 'nbnf segc wsyb lffs' 
+DEFAULT_FROM_EMAIL = 'SIGMA Taller <sebaruz2004@gmail.com>'
 
 
 CORS_ALLOW_ALL_ORIGINS = True
