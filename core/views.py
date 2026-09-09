@@ -1,6 +1,5 @@
-from rest_framework import viewsets
-from .utils import enviar_correo_orden
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import viewsets, permissions
+from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -121,23 +120,30 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         serializer.save(taller_id=self.request.user.taller_id)
 
     def perform_update(self, serializer):
+        # Capturamos el estado anterior para comparar si realmente cambió (opcional pero recomendado)
+        instancia_antigua = self.get_object()
+        estado_anterior = instancia_antigua.estado
+
+        # Guardamos la orden actualizada
         orden_actualizada = serializer.save()
         
-        # Asumiendo que el campo del correo en tu modelo se llama cliente_email
-        if hasattr(orden_actualizada, 'cliente_email') and orden_actualizada.cliente_email:
-            try:
-                enviar_correo_orden(orden_actualizada.cliente_email, orden_actualizada)
-            except Exception as e:
-                print(f"Error al enviar correo automático: {e}")
-
-
-
-
-class OrdenRepuestoViewSet(viewsets.ModelViewSet):
-    queryset = OrdenRepuesto.objects.all()
-    serializer_class = OrdenRepuestoSerializer
-    permission_classes = [IsAuthenticated, TieneModuloActivo]
-    modulo_requerido = 'ordenes'
+        # Si el estado cambió y el cliente tiene correo registrado
+        if estado_anterior != orden_actualizada.estado:
+            if hasattr(orden_actualizada, 'cliente_email') and orden_actualizada.cliente_email:
+                try:
+                    send_mail(
+                        subject=f"Actualización de tu vehículo - Orden {orden_actualizada.codigo_seguimiento}",
+                        message=(
+                            f"Hola, el estado de tu vehículo ha cambiado a: {orden_actualizada.estado}.\n\n"
+                            f"Puedes revisar el progreso en tiempo real usando tu código de seguimiento: {orden_actualizada.codigo_seguimiento}"
+                        ),
+                        from_email=None,  # Utiliza automáticamente tu DEFAULT_FROM_EMAIL de Gmail configurado en settings.py
+                        recipient_list=[orden_actualizada.cliente_email],
+                        fail_silently=False,
+                    )
+                    print(f"Correo enviado exitosamente a {orden_actualizada.cliente_email} con el código {orden_actualizada.codigo_seguimiento}")
+                except Exception as e:
+                    print(f"Error al enviar correo automático: {e}")
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
