@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.response import Response
