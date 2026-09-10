@@ -117,14 +117,12 @@ class OrdenTrabajo(models.Model):
             self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
         super().save(*args, **kwargs)
 
-
 class OrdenRepuesto(models.Model):
     orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name='repuestos_usados')
     repuesto = models.ForeignKey(Repuesto, on_delete=models.PROTECT)
     cantidad = models.PositiveIntegerField(default=1)
 
-    class Meta:
-        unique_together = ('orden', 'repuesto')
+    # Quitamos el Meta con unique_together para permitir duplicados
 
     def __str__(self):
         return f"{self.orden} — {self.repuesto} x{self.cantidad}"
