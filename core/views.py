@@ -9,7 +9,7 @@ from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from rest_framework.exceptions import ValidationError
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
-    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto
+    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, Cliente
 )
 from .serializers import (
     TallerSerializer, UsuarioSerializer,
@@ -122,10 +122,12 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         taller_id = self.request.user.taller_id
         
-        # Extraer los datos del cliente enviados desde el formulario
+        # Extraer los datos del cliente y la patente enviados desde el formulario
         cliente_nombre = self.request.data.get('cliente_nombre')
         cliente_email = self.request.data.get('cliente_email')
         cliente_telefono = self.request.data.get('cliente_telefono', '')
+        cliente_direccion = self.request.data.get('cliente_direccion', '')
+        patente = self.request.data.get('patente', '')
 
         # Buscar si el cliente ya existe dentro de este taller (por correo o teléfono)
         cliente = None
@@ -141,19 +143,22 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 taller_id=taller_id,
                 nombre=cliente_nombre,
                 email=cliente_email,
-                telefono=cliente_telefono
+                telefono=cliente_telefono,
+                direccion=cliente_direccion
             )
         else:
-            # Actualizar datos por si cambiaron
+            # Actualizar datos del cliente por si cambiaron
             cliente.nombre = cliente_nombre
             if cliente_email:
                 cliente.email = cliente_email
             if cliente_telefono:
                 cliente.telefono = cliente_telefono
+            if cliente_direccion:
+                cliente.direccion = cliente_direccion
             cliente.save()
 
-        # Guardar la orden asociándola al taller y al cliente encontrado/creado
-        orden = serializer.save(taller_id=taller_id, cliente=cliente)
+        # Guardar la orden asociándola al taller, al cliente y guardando la patente
+        orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente)
         
         # Enviar correo al crear la orden indicando el taller
         if orden.cliente_email:
@@ -171,7 +176,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
                         <p>Hola <strong>{orden.cliente_nombre}</strong>,</p>
-                        <p>Hemos registrado tu equipo/vehículo (<strong>{orden.equipo}</strong>) en <strong>{nombre_taller}</strong>.</p>
+                        <p>Hemos registrado tu vehículo (<strong>{orden.equipo}</strong> - Patente: <strong>{orden.patente or 'N/A'}</strong>) en <strong>{nombre_taller}</strong>.</p>
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
@@ -240,6 +245,7 @@ class OrdenPublicaView(APIView):
             'id': orden.id,
             'codigo_seguimiento': orden.codigo_seguimiento,
             'equipo': orden.equipo,
+            'patente': orden.patente,
             'estado': orden.estado,
             'cliente_nombre': orden.cliente_nombre,
             'tecnico_nombre': tecnico_nombre,
