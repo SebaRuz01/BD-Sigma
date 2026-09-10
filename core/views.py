@@ -47,6 +47,7 @@ class OrdenRepuestoViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.repuesto.stock_actual += instance.cantidad
+        instance.repuesto.stock_actual += instance.cantidad
         instance.repuesto.save()
         instance.delete()
 
@@ -122,7 +123,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         taller_id = self.request.user.taller_id
         
-        # Extraer todos los campos del cliente, incluyendo el RUT y la patente desde el request
         cliente_nombre = self.request.data.get('cliente_nombre')
         cliente_rut = self.request.data.get('cliente_rut', '')
         cliente_email = self.request.data.get('cliente_email')
@@ -130,15 +130,17 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         cliente_direccion = self.request.data.get('cliente_direccion', '')
         patente = self.request.data.get('patente', '')
 
-        # Buscar si el cliente ya existe dentro de este taller (por correo o teléfono)
+        # Búsqueda prioritaria por RUT primero, luego email y teléfono
         cliente = None
-        if cliente_email:
+        if cliente_rut:
+            cliente = Cliente.objects.filter(taller_id=taller_id, rut=cliente_rut).first()
+        
+        if not cliente and cliente_email:
             cliente = Cliente.objects.filter(taller_id=taller_id, email=cliente_email).first()
         
         if not cliente and cliente_telefono:
             cliente = Cliente.objects.filter(taller_id=taller_id, telefono=cliente_telefono).first()
 
-        # Si no existe, crearlo en la tabla core_cliente con su RUT
         if not cliente:
             cliente = Cliente.objects.create(
                 taller_id=taller_id,
@@ -149,8 +151,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 direccion=cliente_direccion
             )
         else:
-            # Actualizar datos por si cambiaron (incluyendo el RUT)
-            cliente.nombre = cliente_nombre
+            if cliente_nombre:
+                cliente.nombre = cliente_nombre
             if cliente_rut:
                 cliente.rut = cliente_rut
             if cliente_email:
@@ -161,10 +163,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 cliente.direccion = cliente_direccion
             cliente.save()
 
-        # Guardar la orden asociando el taller, el cliente y la patente
         orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente)
         
-        # Enviar correo al crear la orden indicando el taller
         if orden.cliente and orden.cliente.email:
             try:
                 url = "https://api.brevo.com/v3/smtp/email"
@@ -198,7 +198,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
         orden_actualizada = serializer.save()
         
-        # Si el estado cambió y el cliente tiene correo registrado
         if estado_anterior != orden_actualizada.estado:
             if orden_actualizada.cliente and orden_actualizada.cliente.email:
                 try:
