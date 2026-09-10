@@ -95,19 +95,19 @@ class OrdenRepuestoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
-    tecnico_nombre = serializers.SerializerMethodField()
-    repuestos_usados = OrdenRepuestoSerializer(many=True, read_only=True)
+    cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
+    cliente_email = serializers.EmailField(source='cliente.email', read_only=True)
+    cliente_telefono = serializers.CharField(source='cliente.telefono', read_only=True)
+    tecnico_nombre = serializers.CharField(source='tecnico.usuario.username', read_only=True)
 
     class Meta:
         model = OrdenTrabajo
-        fields = '__all__'
-        read_only_fields = ['taller']
-
-    def get_tecnico_nombre(self, obj):
-        if not obj.tecnico:
-            return None
-        nombre_completo = f"{obj.tecnico.usuario.first_name} {obj.tecnico.usuario.last_name}".strip()
-        return nombre_completo or obj.tecnico.usuario.username
+        fields = [
+            'id', 'taller', 'codigo_seguimiento', 'tecnico', 'tecnico_nombre',
+            'cliente', 'cliente_nombre', 'cliente_email', 'cliente_telefono',
+            'equipo', 'descripcion_problema', 'estado', 'fecha_recepcion', 'repuestos_usados'
+        ]
+        read_only_fields = ['taller', 'codigo_seguimiento', 'cliente']
 
 class TallerCreateSerializer(serializers.ModelSerializer):
     admin_username = serializers.CharField(write_only=True)
