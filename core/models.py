@@ -61,6 +61,7 @@ class ModuloContratado(models.Model):
     def __str__(self):
         return f"{self.taller} — {self.modulo} ({'activo' if self.activo else 'inactivo'})"
 
+
 class Tecnico(models.Model):
     taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='tecnicos')
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='perfil_tecnico')
@@ -78,13 +79,24 @@ class Repuesto(models.Model):
     stock_minimo = models.PositiveIntegerField(default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # Nuevos campos agregados
     anio = models.IntegerField(null=True, blank=True)
     modelo = models.CharField(max_length=100, null=True, blank=True)
     compatibilidades = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.nombre} ({self.taller})"
+
+
+class Cliente(models.Model):
+    taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='clientes')
+    nombre = models.CharField(max_length=150)
+    email = models.EmailField(blank=True, null=True)
+    telefono = models.CharField(max_length=30, blank=True)
+    rut = models.CharField(max_length=20, blank=True, null=True)
+    direccion = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.nombre} ({self.telefono})"
 
 
 class OrdenTrabajo(models.Model):
@@ -115,12 +127,11 @@ class OrdenTrabajo(models.Model):
             self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
         super().save(*args, **kwargs)
 
+
 class OrdenRepuesto(models.Model):
     orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name='repuestos_usados')
     repuesto = models.ForeignKey(Repuesto, on_delete=models.PROTECT)
     cantidad = models.PositiveIntegerField(default=1)
-
-    # Quitamos el Meta con unique_together para permitir duplicados
 
     def __str__(self):
         return f"{self.orden} — {self.repuesto} x{self.cantidad}"
