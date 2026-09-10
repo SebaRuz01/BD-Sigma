@@ -100,6 +100,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
     cliente_telefono = serializers.CharField(source='cliente.telefono', read_only=True)
     cliente_direccion = serializers.CharField(source='cliente.direccion', read_only=True)
     tecnico_nombre = serializers.CharField(source='tecnico.usuario.username', read_only=True)
+    repuestos_usados = OrdenRepuestoSerializer(many=True, read_only=True) 
 
     class Meta:
         model = OrdenTrabajo
