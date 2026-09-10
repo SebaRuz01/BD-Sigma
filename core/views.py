@@ -122,8 +122,9 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         taller_id = self.request.user.taller_id
         
-        # Extraer todos los campos del cliente y la patente desde el request
+        # Extraer todos los campos del cliente, incluyendo el RUT y la patente desde el request
         cliente_nombre = self.request.data.get('cliente_nombre')
+        cliente_rut = self.request.data.get('cliente_rut', '')
         cliente_email = self.request.data.get('cliente_email')
         cliente_telefono = self.request.data.get('cliente_telefono', '')
         cliente_direccion = self.request.data.get('cliente_direccion', '')
@@ -137,18 +138,21 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         if not cliente and cliente_telefono:
             cliente = Cliente.objects.filter(taller_id=taller_id, telefono=cliente_telefono).first()
 
-        # Si no existe, crearlo en la tabla core_cliente
+        # Si no existe, crearlo en la tabla core_cliente con su RUT
         if not cliente:
             cliente = Cliente.objects.create(
                 taller_id=taller_id,
                 nombre=cliente_nombre,
+                rut=cliente_rut,
                 email=cliente_email,
                 telefono=cliente_telefono,
                 direccion=cliente_direccion
             )
         else:
-            # Actualizar datos por si cambiaron
+            # Actualizar datos por si cambiaron (incluyendo el RUT)
             cliente.nombre = cliente_nombre
+            if cliente_rut:
+                cliente.rut = cliente_rut
             if cliente_email:
                 cliente.email = cliente_email
             if cliente_telefono:
