@@ -82,11 +82,16 @@ class RepuestoSerializer(serializers.ModelSerializer):
 
 class OrdenRepuestoSerializer(serializers.ModelSerializer):
     repuesto_nombre = serializers.CharField(source='repuesto.nombre', read_only=True)
-    repuesto_precio = serializers.DecimalField(source='repuesto.precio', read_only=True, max_digits=10, decimal_places=2)
+    # Agregamos este campo para incluir la compatibilidad y el stock
+    repuesto_detalles = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = OrdenRepuesto
-        fields = '__all__'
+        fields = ['id', 'orden', 'repuesto', 'repuesto_nombre', 'repuesto_detalles', 'cantidad']
+
+    def get_repuesto_detalles(self, obj):
+        compat = obj.repuesto.compatibilidades or 'Universal'
+        return f"{obj.repuesto.nombre} ({compat}) - Stock: {obj.repuesto.stock_actual}"
 
 
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
