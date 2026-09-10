@@ -127,6 +127,14 @@ class OrdenTrabajo(models.Model):
             self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        # Devolver el stock de todos los repuestos asociados antes de borrar la orden
+        for orden_repuesto in self.repuestos_usados.all():
+            repuesto = orden_repuesto.repuesto
+            repuesto.stock_actual += orden_repuesto.cantidad
+            repuesto.save()
+        super().delete(*args, **kwargs)
+
 
 class OrdenRepuesto(models.Model):
     orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name='repuestos_usados')
