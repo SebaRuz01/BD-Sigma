@@ -120,7 +120,40 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id)
 
     def perform_create(self, serializer):
-        orden = serializer.save(taller_id=self.request.user.taller_id)
+        taller_id = self.request.user.taller_id
+        
+        # Extraer los datos del cliente enviados desde el formulario
+        cliente_nombre = self.request.data.get('cliente_nombre')
+        cliente_email = self.request.data.get('cliente_email')
+        cliente_telefono = self.request.data.get('cliente_telefono', '')
+
+        # Buscar si el cliente ya existe dentro de este taller (por correo o teléfono)
+        cliente = None
+        if cliente_email:
+            cliente = Cliente.objects.filter(taller_id=taller_id, email=cliente_email).first()
+        
+        if not cliente and cliente_telefono:
+            cliente = Cliente.objects.filter(taller_id=taller_id, telefono=cliente_telefono).first()
+
+        # Si no existe, lo creamos automáticamente en la tabla core_cliente
+        if not cliente:
+            cliente = Cliente.objects.create(
+                taller_id=taller_id,
+                nombre=cliente_nombre,
+                email=cliente_email,
+                telefono=cliente_telefono
+            )
+        else:
+            # Actualizar datos por si cambiaron
+            cliente.nombre = cliente_nombre
+            if cliente_email:
+                cliente.email = cliente_email
+            if cliente_telefono:
+                cliente.telefono = cliente_telefono
+            cliente.save()
+
+        # Guardar la orden asociándola al taller y al cliente encontrado/creado
+        orden = serializer.save(taller_id=taller_id, cliente=cliente)
         
         # Enviar correo al crear la orden indicando el taller
         if orden.cliente_email:
@@ -184,7 +217,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         print(f"Error de Brevo al enviar correo: {response.text}")
                 except Exception as e:
                     print(f"Excepción al conectar con Brevo: {e}")
-
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
