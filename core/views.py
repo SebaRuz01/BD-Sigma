@@ -122,7 +122,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         taller_id = self.request.user.taller_id
         
-        # Extraer los datos del cliente y la patente enviados desde el formulario
+        # Extraer todos los campos del cliente y la patente desde el request
         cliente_nombre = self.request.data.get('cliente_nombre')
         cliente_email = self.request.data.get('cliente_email')
         cliente_telefono = self.request.data.get('cliente_telefono', '')
@@ -137,7 +137,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         if not cliente and cliente_telefono:
             cliente = Cliente.objects.filter(taller_id=taller_id, telefono=cliente_telefono).first()
 
-        # Si no existe, lo creamos automáticamente en la tabla core_cliente
+        # Si no existe, crearlo en la tabla core_cliente
         if not cliente:
             cliente = Cliente.objects.create(
                 taller_id=taller_id,
@@ -147,7 +147,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 direccion=cliente_direccion
             )
         else:
-            # Actualizar datos del cliente por si cambiaron
+            # Actualizar datos por si cambiaron
             cliente.nombre = cliente_nombre
             if cliente_email:
                 cliente.email = cliente_email
@@ -157,7 +157,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 cliente.direccion = cliente_direccion
             cliente.save()
 
-        # Guardar la orden asociándola al taller, al cliente y guardando la patente
+        # Guardar la orden asociando el taller, el cliente y la patente
         orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente)
         
         # Enviar correo al crear la orden indicando el taller
