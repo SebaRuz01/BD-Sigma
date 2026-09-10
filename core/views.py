@@ -161,7 +161,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente)
         
         # Enviar correo al crear la orden indicando el taller
-        if orden.cliente_email:
+        if orden.cliente and orden.cliente.email:
             try:
                 url = "https://api.brevo.com/v3/smtp/email"
                 headers = {
@@ -172,17 +172,17 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                    "to": [{"email": orden.cliente_email}],
+                    "to": [{"email": orden.cliente.email}],
                     "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
-                        <p>Hola <strong>{orden.cliente_nombre}</strong>,</p>
+                        <p>Hola <strong>{orden.cliente.nombre}</strong>,</p>
                         <p>Hemos registrado tu vehículo (<strong>{orden.equipo}</strong> - Patente: <strong>{orden.patente or 'N/A'}</strong>) en <strong>{nombre_taller}</strong>.</p>
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
                 response = requests.post(url, json=payload, headers=headers)
                 if response.status_code == 201:
-                    print(f"Correo de creación enviado a {orden.cliente_email}")
+                    print(f"Correo de creación enviado a {orden.cliente.email}")
                 else:
                     print(f"Error Brevo al crear orden: {response.text}")
             except Exception as e:
@@ -196,7 +196,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         
         # Si el estado cambió y el cliente tiene correo registrado
         if estado_anterior != orden_actualizada.estado:
-            if orden_actualizada.cliente_email:
+            if orden_actualizada.cliente and orden_actualizada.cliente.email:
                 try:
                     url = "https://api.brevo.com/v3/smtp/email"
                     headers = {
@@ -207,17 +207,17 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     payload = {
                         "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                        "to": [{"email": orden_actualizada.cliente_email}],
+                        "to": [{"email": orden_actualizada.cliente.email}],
                         "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
-                            <p>Hola <strong>{orden_actualizada.cliente_nombre}</strong>,</p>
+                            <p>Hola <strong>{orden_actualizada.cliente.nombre}</strong>,</p>
                             <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
                             <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
                         """
                     }
                     response = requests.post(url, json=payload, headers=headers)
                     if response.status_code == 201:
-                        print(f"Correo enviado exitosamente vía Brevo a {orden_actualizada.cliente_email}")
+                        print(f"Correo enviado exitosamente vía Brevo a {orden_actualizada.cliente.email}")
                     else:
                         print(f"Error de Brevo al enviar correo: {response.text}")
                 except Exception as e:
@@ -247,6 +247,6 @@ class OrdenPublicaView(APIView):
             'equipo': orden.equipo,
             'patente': orden.patente,
             'estado': orden.estado,
-            'cliente_nombre': orden.cliente_nombre,
+            'cliente_nombre': orden.cliente.nombre if orden.cliente else None,
             'tecnico_nombre': tecnico_nombre,
         })
