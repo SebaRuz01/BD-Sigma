@@ -10,17 +10,16 @@ from .models import LoginCliente
 class LoginClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoginCliente
-        fields = ['id', 'nombre', 'email', 'telefono', 'password', 'rol'] 
+        # Dejamos solo los campos que la app envía y que tu base de datos acepta
+        fields = ['id', 'nombre', 'email', 'telefono', 'password'] 
         extra_kwargs = {
             'password': {'write_only': True},
-            'rol': {'required': False} # Para que la app no obligue a mandarlo si no quiere
+            'telefono': {'required': False, 'allow_blank': True, 'allow_null': True}
         } 
 
     def create(self, validated_data):
-        # Encriptar la contraseña antes de guardar en la BD
+        # Encriptar la contraseña antes de guardar en la BD por seguridad
         validated_data['password'] = make_password(validated_data['password'])
-        # Forzar por seguridad que el rol siempre sea cliente
-        validated_data['rol'] = 'cliente'
         return super().create(validated_data)
 
 class TallerSerializer(serializers.ModelSerializer):
