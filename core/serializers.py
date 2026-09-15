@@ -1,16 +1,14 @@
 from rest_framework import serializers
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
-    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto
+    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, LoginCliente
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
 from django.contrib.auth.hashers import make_password
-from .models import LoginCliente
+
 class LoginClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoginCliente
-        # Dejamos solo los campos que la app envía y que tu base de datos acepta
         fields = ['id', 'nombre', 'email', 'telefono', 'password'] 
         extra_kwargs = {
             'password': {'write_only': True},
@@ -18,9 +16,10 @@ class LoginClienteSerializer(serializers.ModelSerializer):
         } 
 
     def create(self, validated_data):
-        # Encriptar la contraseña antes de guardar en la BD por seguridad
+        # Encriptar la contraseña antes de guardar en la BD
         validated_data['password'] = make_password(validated_data['password'])
         return super().create(validated_data)
+
 
 class TallerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -46,7 +45,8 @@ class ModuloContratadoSerializer(serializers.ModelSerializer):
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'rol', 'taller']   
+        fields = ['id', 'username', 'email', 'rol', 'taller']    
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -56,6 +56,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['rol'] = user.rol
         token['username'] = user.username
         return token
+
 
 class TecnicoSerializer(serializers.ModelSerializer):
     nombre = serializers.SerializerMethodField()
@@ -67,6 +68,7 @@ class TecnicoSerializer(serializers.ModelSerializer):
     def get_nombre(self, obj):
         nombre_completo = f"{obj.usuario.first_name} {obj.usuario.last_name}".strip()
         return nombre_completo or obj.usuario.username
+
 
 class TecnicoCreateSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
@@ -90,15 +92,16 @@ class TecnicoCreateSerializer(serializers.ModelSerializer):
         )
         return Tecnico.objects.create(usuario=usuario, taller=taller, **validated_data)
 
+
 class RepuestoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Repuesto
         fields = '__all__'
         read_only_fields = ['taller']
 
+
 class OrdenRepuestoSerializer(serializers.ModelSerializer):
     repuesto_nombre = serializers.CharField(source='repuesto.nombre', read_only=True)
-    # Agregamos este campo para incluir la compatibilidad y el stock
     repuesto_detalles = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -126,6 +129,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             'equipo', 'patente', 'descripcion_problema', 'estado', 'fecha_recepcion', 'repuestos_usados'
         ]
         read_only_fields = ['taller', 'codigo_seguimiento', 'cliente']
+
 
 class TallerCreateSerializer(serializers.ModelSerializer):
     admin_username = serializers.CharField(write_only=True)
