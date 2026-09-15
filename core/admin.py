@@ -10,7 +10,10 @@ admin.site.register(Modulo)
 admin.site.register(ModuloContratado)
 admin.site.register(Tecnico)
 admin.site.register(Repuesto)
+
 @admin.register(OrdenTrabajo)
 class OrdenTrabajoAdmin(admin.ModelAdmin):
-    list_display = ['id', 'codigo_seguimiento', 'equipo', 'cliente_nombre', 'estado']
+    # Cambiamos 'cliente_nombre' por 'cliente' que es el campo real del modelo original
+    list_display = ['id', 'codigo_seguimiento', 'equipo', 'cliente', 'estado']
+
 admin.site.register(OrdenRepuesto)
