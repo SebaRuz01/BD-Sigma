@@ -21,6 +21,21 @@ from .serializers import (
     TallerCreateSerializer
 )
 
+
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from .models import LoginCliente
+from .serializers import LoginClienteSerializer
+
+class LoginClienteViewSet(viewsets.ModelViewSet):
+    queryset = LoginCliente.objects.all()
+    serializer_class = LoginClienteSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
 class OrdenRepuestoViewSet(viewsets.ModelViewSet):
     queryset = OrdenRepuesto.objects.all()
     serializer_class = OrdenRepuestoSerializer
