@@ -2,18 +2,6 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 import uuid
 
-class LoginCliente(models.Model):
-    cliente_id = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
-    nombre = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
-    telefono = models.CharField(max_length=50, null=True, blank=True)
-    password = models.CharField(max_length=255)
-    is_active = models.BooleanField(default=True)
-    fecha_registro = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'core_logincliente'
-
 class Taller(models.Model):
     ESTADOS = [
         ('activo', 'Activo'),
@@ -110,6 +98,19 @@ class Cliente(models.Model):
         return f"{self.nombre} ({self.telefono})"
 
 
+class LoginCliente(models.Model):
+    cliente_id = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
+    nombre = models.CharField(max_length=255)
+    email = models.EmailField(unique=True)
+    telefono = models.CharField(max_length=50, null=True, blank=True)
+    password = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'core_logincliente'
+
+
 class OrdenTrabajo(models.Model):
     ESTADOS = [
         ('recibido', 'Recibido'),
@@ -139,7 +140,6 @@ class OrdenTrabajo(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # Devolver el stock de todos los repuestos asociados antes de borrar la orden
         for orden_repuesto in self.repuestos_usados.all():
             repuesto = orden_repuesto.repuesto
             repuesto.stock_actual += orden_repuesto.cantidad
