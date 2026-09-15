@@ -9,7 +9,7 @@ from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from rest_framework.exceptions import ValidationError
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
-    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, Cliente
+    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, Cliente, LoginCliente
 )
 from .serializers import (
     TallerSerializer, UsuarioSerializer,
@@ -18,20 +18,16 @@ from .serializers import (
     OrdenTrabajoSerializer, OrdenRepuestoSerializer,
     CustomTokenObtainPairSerializer,
     TecnicoCreateSerializer,
-    TallerCreateSerializer
+    TallerCreateSerializer,
+    LoginClienteSerializer
 )
-
-
-from rest_framework import viewsets
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import LoginCliente
-from .serializers import LoginClienteSerializer
 
 class LoginClienteViewSet(viewsets.ModelViewSet):
     queryset = LoginCliente.objects.all()
     serializer_class = LoginClienteSerializer
 
     def get_permissions(self):
+        # Permitir registro libre solo en POST, el resto requiere autenticación
         if self.request.method == 'POST':
             return [AllowAny()]
         return [IsAuthenticated()]
@@ -56,12 +52,10 @@ class OrdenRepuestoViewSet(viewsets.ModelViewSet):
             raise ValidationError(f'Stock insuficiente. Disponible: {repuesto.stock_actual}')
 
         serializer.save()
-
         repuesto.stock_actual -= cantidad
         repuesto.save()
 
     def perform_destroy(self, instance):
-        instance.repuesto.stock_actual += instance.cantidad
         instance.repuesto.stock_actual += instance.cantidad
         instance.repuesto.save()
         instance.delete()
@@ -79,6 +73,7 @@ class TallerViewSet(viewsets.ModelViewSet):
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class ModuloViewSet(viewsets.ModelViewSet):
@@ -145,7 +140,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         cliente_direccion = self.request.data.get('cliente_direccion', '')
         patente = self.request.data.get('patente', '')
 
-        # Búsqueda prioritaria por RUT primero, luego email y teléfono
         cliente = None
         if cliente_rut:
             cliente = Cliente.objects.filter(taller_id=taller_id, rut=cliente_rut).first()
@@ -199,47 +193,9 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
-                response = requests.post(url, json=payload, headers=headers)
-                if response.status_code == 201:
-                    print(f"Correo de creación enviado a {orden.cliente.email}")
-                else:
-                    print(f"Error Brevo al crear orden: {response.text}")
+                requests.post(url, json=payload, headers=headers)
             except Exception as e:
-                print(f"Excepción al conectar con Brevo (creación): {e}")
-
-    def perform_update(self, serializer):
-        instancia_antigua = self.get_object()
-        estado_anterior = instancia_antigua.estado
-
-        orden_actualizada = serializer.save()
-        
-        if estado_anterior != orden_actualizada.estado:
-            if orden_actualizada.cliente and orden_actualizada.cliente.email:
-                try:
-                    url = "https://api.brevo.com/v3/smtp/email"
-                    headers = {
-                        "accept": "application/json",
-                        "api-key": os.environ.get("BREVO_API_KEY"),
-                        "content-type": "application/json"
-                    }
-                    nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
-                    payload = {
-                        "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                        "to": [{"email": orden_actualizada.cliente.email}],
-                        "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
-                        "htmlContent": f"""
-                            <p>Hola <strong>{orden_actualizada.cliente.nombre}</strong>,</p>
-                            <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
-                            <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
-                        """
-                    }
-                    response = requests.post(url, json=payload, headers=headers)
-                    if response.status_code == 201:
-                        print(f"Correo enviado exitosamente vía Brevo a {orden_actualizada.cliente.email}")
-                    else:
-                        print(f"Error de Brevo al enviar correo: {response.text}")
-                except Exception as e:
-                    print(f"Excepción al conectar con Brevo: {e}")
+                print(f"Excepción Brevo: {e}")
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
