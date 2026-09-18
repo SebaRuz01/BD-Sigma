@@ -1,12 +1,21 @@
 from rest_framework import serializers
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
-    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto
+    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto,
+    Comuna, Vehiculo
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
+class ComunaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comuna
+        fields = '__all__'
+
+
 class TallerSerializer(serializers.ModelSerializer):
+    comuna_nombre = serializers.CharField(source='comuna.nombre', read_only=True)
+
     class Meta:
         model = Taller
         fields = '__all__'
@@ -30,7 +39,8 @@ class ModuloContratadoSerializer(serializers.ModelSerializer):
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'rol', 'taller']   
+        fields = ['id', 'username', 'email', 'rol', 'taller']    
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -40,6 +50,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['rol'] = user.rol
         token['username'] = user.username
         return token
+
 
 class TecnicoSerializer(serializers.ModelSerializer):
     nombre = serializers.SerializerMethodField()
@@ -51,6 +62,7 @@ class TecnicoSerializer(serializers.ModelSerializer):
     def get_nombre(self, obj):
         nombre_completo = f"{obj.usuario.first_name} {obj.usuario.last_name}".strip()
         return nombre_completo or obj.usuario.username
+
 
 class TecnicoCreateSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
@@ -74,15 +86,16 @@ class TecnicoCreateSerializer(serializers.ModelSerializer):
         )
         return Tecnico.objects.create(usuario=usuario, taller=taller, **validated_data)
 
+
 class RepuestoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Repuesto
         fields = '__all__'
         read_only_fields = ['taller']
 
+
 class OrdenRepuestoSerializer(serializers.ModelSerializer):
     repuesto_nombre = serializers.CharField(source='repuesto.nombre', read_only=True)
-    # Agregamos este campo para incluir la compatibilidad y el stock
     repuesto_detalles = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -94,11 +107,20 @@ class OrdenRepuestoSerializer(serializers.ModelSerializer):
         return f"{obj.repuesto.nombre} ({compat}) - Stock: {obj.repuesto.stock_actual}"
 
 
-class OrdenTrabajoSerializer(serializers.ModelSerializer):
+class VehiculoSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
-    cliente_email = serializers.EmailField(source='cliente.email', read_only=True)
-    cliente_telefono = serializers.CharField(source='cliente.telefono', read_only=True)
-    cliente_direccion = serializers.CharField(source='cliente.direccion', read_only=True)
+
+    class Meta:
+        model = Vehiculo
+        fields = '__all__'
+
+
+class OrdenTrabajoSerializer(serializers.ModelSerializer):
+    # Accedemos a los datos a través de la relación normalizada con Vehiculo y Cliente
+    vehiculo_modelo = serializers.CharField(source='vehiculo.modelo', read_only=True)
+    vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only=True)
+    cliente_nombre = serializers.CharField(source='vehiculo.cliente.nombre', read_only=True)
+    cliente_telefono = serializers.CharField(source='vehiculo.cliente.telefono', read_only=True)
     tecnico_nombre = serializers.CharField(source='tecnico.usuario.username', read_only=True)
     repuestos_usados = OrdenRepuestoSerializer(many=True, read_only=True) 
 
@@ -106,10 +128,13 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         model = OrdenTrabajo
         fields = [
             'id', 'taller', 'codigo_seguimiento', 'tecnico', 'tecnico_nombre',
-            'cliente', 'cliente_nombre', 'cliente_email', 'cliente_telefono', 'cliente_direccion',
-            'equipo', 'patente', 'descripcion_problema', 'estado', 'fecha_recepcion', 'repuestos_usados'
+            'vehiculo', 'vehiculo_modelo', 'vehiculo_patente',
+            'cliente_nombre', 'cliente_telefono',
+            'descripcion_problema', 'estado', 'fecha_recepcion', 
+            'fecha_estimada', 'fecha_entrega', 'repuestos_usados'
         ]
-        read_only_fields = ['taller', 'codigo_seguimiento', 'cliente']
+        read_only_fields = ['taller', 'codigo_seguimiento']
+
 
 class TallerCreateSerializer(serializers.ModelSerializer):
     admin_username = serializers.CharField(write_only=True)
@@ -120,7 +145,7 @@ class TallerCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Taller
         fields = [
-            'id', 'nombre_comercial', 'rut', 'rubro', 'direccion', 'estado',
+            'id', 'nombre_comercial', 'rut', 'rubro', 'calle', 'numero', 'comuna', 'estado',
             'admin_username', 'admin_password', 'admin_nombre', 'admin_apellido',
         ]
 
