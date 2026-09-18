@@ -18,8 +18,7 @@ admin.site.register(Repuesto)
 
 @admin.register(OrdenTrabajo)
 class OrdenTrabajoAdmin(admin.ModelAdmin):
-    # Actualizado con 'vehiculo' en lugar de 'equipo' y 'cliente'
-    list_display = ('id', 'codigo_seguimiento', 'vehiculo', 'estado', 'fecha_recepcion')
-    search_fields = ('codigo_seguimiento', 'vehiculo__patente', 'vehiculo__modelo')
+    list_display = ('id', 'codigo_seguimiento', 'equipo', 'patente', 'estado', 'fecha_recepcion')
+    search_fields = ('codigo_seguimiento', 'patente', 'equipo')
 
 admin.site.register(OrdenRepuesto)
