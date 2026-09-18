@@ -47,9 +47,9 @@ class OrdenRepuestoViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         instance.repuesto.stock_actual += instance.cantidad
+        instance.repuesto.stock_actual += instance.cantidad
         instance.repuesto.save()
         instance.delete()
-
 
 class TallerViewSet(viewsets.ModelViewSet):
     queryset = Taller.objects.all()
@@ -129,7 +129,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         cliente_telefono = self.request.data.get('cliente_telefono', '')
         cliente_direccion = self.request.data.get('cliente_direccion', '')
         patente = self.request.data.get('patente', '')
-        equipo = self.request.data.get('equipo', '')
 
         # Búsqueda prioritaria por RUT primero, luego email y teléfono
         cliente = None
@@ -164,7 +163,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 cliente.direccion = cliente_direccion
             cliente.save()
 
-        orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente, equipo=equipo)
+        orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente)
         
         if orden.cliente and orden.cliente.email:
             try:
@@ -181,7 +180,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
                         <p>Hola <strong>{orden.cliente.nombre}</strong>,</p>
-                        <p>Hemos registrado tu vehículo/equipo (<strong>{orden.equipo}</strong> - Patente: <strong>{orden.patente or 'N/A'}</strong>) en <strong>{nombre_taller}</strong>.</p>
+                        <p>Hemos registrado tu vehículo (<strong>{orden.equipo}</strong> - Patente: <strong>{orden.patente or 'N/A'}</strong>) en <strong>{nombre_taller}</strong>.</p>
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
@@ -215,7 +214,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
                             <p>Hola <strong>{orden_actualizada.cliente.nombre}</strong>,</p>
-                            <p>El estado de tu orden en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
+                            <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
                             <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
                         """
                     }
@@ -226,7 +225,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         print(f"Error de Brevo al enviar correo: {response.text}")
                 except Exception as e:
                     print(f"Excepción al conectar con Brevo: {e}")
-
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
