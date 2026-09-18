@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
     Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto,
-    Comuna, Vehiculo
+    Comuna, Vehiculo, Cliente
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -116,11 +116,10 @@ class VehiculoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
-    # Accedemos a los datos a través de la relación normalizada con Vehiculo y Cliente
-    vehiculo_modelo = serializers.CharField(source='vehiculo.modelo', read_only=True)
-    vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only=True)
-    cliente_nombre = serializers.CharField(source='vehiculo.cliente.nombre', read_only=True)
-    cliente_telefono = serializers.CharField(source='vehiculo.cliente.telefono', read_only=True)
+    cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
+    cliente_email = serializers.EmailField(source='cliente.email', read_only=True)
+    cliente_telefono = serializers.CharField(source='cliente.telefono', read_only=True)
+    cliente_direccion = serializers.CharField(source='cliente.direccion', read_only=True)
     tecnico_nombre = serializers.CharField(source='tecnico.usuario.username', read_only=True)
     repuestos_usados = OrdenRepuestoSerializer(many=True, read_only=True) 
 
@@ -128,12 +127,11 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         model = OrdenTrabajo
         fields = [
             'id', 'taller', 'codigo_seguimiento', 'tecnico', 'tecnico_nombre',
-            'vehiculo', 'vehiculo_modelo', 'vehiculo_patente',
-            'cliente_nombre', 'cliente_telefono',
-            'descripcion_problema', 'estado', 'fecha_recepcion', 
+            'cliente', 'cliente_nombre', 'cliente_email', 'cliente_telefono', 'cliente_direccion',
+            'equipo', 'patente', 'descripcion_problema', 'estado', 'fecha_recepcion', 
             'fecha_estimada', 'fecha_entrega', 'repuestos_usados'
         ]
-        read_only_fields = ['taller', 'codigo_seguimiento']
+        read_only_fields = ['taller', 'codigo_seguimiento', 'cliente']
 
 
 class TallerCreateSerializer(serializers.ModelSerializer):
@@ -145,7 +143,7 @@ class TallerCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Taller
         fields = [
-            'id', 'nombre_comercial', 'rut', 'rubro', 'calle', 'numero', 'comuna', 'estado',
+            'id', 'nombre_comercial', 'rut', 'rubro', 'direccion', 'comuna', 'estado',
             'admin_username', 'admin_password', 'admin_nombre', 'admin_apellido',
         ]
 
