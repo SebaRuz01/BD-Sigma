@@ -3,17 +3,6 @@ from django.contrib.auth.models import AbstractUser
 import uuid
 
 
-class Comuna(models.Model):
-    nombre = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
-
-    class Meta:
-        db_table = 'core_comuna'
-
-    def __str__(self):
-        return f"{self.nombre} ({self.region})"
-
-
 class Taller(models.Model):
     ESTADOS = [
         ('activo', 'Activo'),
@@ -21,16 +10,12 @@ class Taller(models.Model):
         ('prueba', 'Prueba'),
     ]
 
-    comuna = models.ForeignKey(Comuna, on_delete=models.SET_NULL, null=True, blank=True, related_name='talleres')
     nombre_comercial = models.CharField(max_length=150)
     rut = models.CharField(max_length=20, unique=True)
     rubro = models.CharField(max_length=50)
     direccion = models.CharField(max_length=255, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='prueba')
     fecha_alta = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'core_taller'
 
     def __str__(self):
         return self.nombre_comercial
@@ -50,9 +35,6 @@ class Usuario(AbstractUser):
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='admin_taller')
 
-    class Meta:
-        db_table = 'core_usuario'
-
     def __str__(self):
         return f"{self.username} ({self.rol})"
 
@@ -61,9 +43,6 @@ class Modulo(models.Model):
     nombre = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     descripcion = models.TextField(blank=True)
-
-    class Meta:
-        db_table = 'core_modulo'
 
     def __str__(self):
         return self.nombre
@@ -77,7 +56,6 @@ class ModuloContratado(models.Model):
     fecha_fin = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'core_modulocontratado'
         unique_together = ('taller', 'modulo')
 
     def __str__(self):
@@ -90,9 +68,6 @@ class Tecnico(models.Model):
     especialidad = models.CharField(max_length=100, blank=True)
     eficiencia_promedio = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
-    class Meta:
-        db_table = 'core_tecnico'
-
     def __str__(self):
         return f"{self.usuario.username} — {self.especialidad}"
 
@@ -103,12 +78,10 @@ class Repuesto(models.Model):
     stock_actual = models.PositiveIntegerField(default=0)
     stock_minimo = models.PositiveIntegerField(default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
     anio = models.IntegerField(null=True, blank=True)
     modelo = models.CharField(max_length=100, null=True, blank=True)
     compatibilidades = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'core_repuesto'
 
     def __str__(self):
         return f"{self.nombre} ({self.taller})"
@@ -116,31 +89,14 @@ class Repuesto(models.Model):
 
 class Cliente(models.Model):
     taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='clientes')
-    comuna = models.ForeignKey(Comuna, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes')
     nombre = models.CharField(max_length=150)
     email = models.EmailField(blank=True, null=True)
     telefono = models.CharField(max_length=30, blank=True)
     rut = models.CharField(max_length=20, blank=True, null=True)
     direccion = models.CharField(max_length=255, blank=True)
 
-    class Meta:
-        db_table = 'core_cliente'
-
     def __str__(self):
         return f"{self.nombre} ({self.telefono})"
-
-
-class Vehiculo(models.Model):
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='vehiculos')
-    patente = models.CharField(max_length=20, blank=True, null=True)
-    modelo = models.CharField(max_length=100)
-    anio = models.IntegerField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'core_vehiculo'
-
-    def __str__(self):
-        return f"{self.modelo} ({self.patente})"
 
 
 class OrdenTrabajo(models.Model):
@@ -154,23 +110,17 @@ class OrdenTrabajo(models.Model):
     taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='ordenes_trabajo')
     codigo_seguimiento = models.CharField(max_length=12, unique=True, editable=False, blank=True)
     tecnico = models.ForeignKey(Tecnico, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
-    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
+
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='ordenes', null=True, blank=True)
     
-    # Campos que están directamente en la tabla core_ordentrabajo según tu DBeaver
-    equipo = models.CharField(max_length=100, blank=True, null=True)
+    equipo = models.CharField(max_length=150)
     patente = models.CharField(max_length=20, blank=True, null=True)
-    
     descripcion_problema = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     fecha_recepcion = models.DateTimeField(auto_now_add=True)
-    fecha_estimada = models.DateTimeField(null=True, blank=True)
-    fecha_entrega = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'core_ordentrabajo'
 
     def __str__(self):
-        return f"OT-{self.id} — {self.equipo}"
+        return f"OT-{self.id} — {self.equipo} ({self.patente})"
 
     def save(self, *args, **kwargs):
         if not self.codigo_seguimiento:
@@ -178,6 +128,7 @@ class OrdenTrabajo(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
+        # Devolver el stock de todos los repuestos asociados antes de borrar la orden
         for orden_repuesto in self.repuestos_usados.all():
             repuesto = orden_repuesto.repuesto
             repuesto.stock_actual += orden_repuesto.cantidad
@@ -190,8 +141,5 @@ class OrdenRepuesto(models.Model):
     repuesto = models.ForeignKey(Repuesto, on_delete=models.PROTECT)
     cantidad = models.PositiveIntegerField(default=1)
 
-    class Meta:
-        db_table = 'core_ordenrepuesto'
-
-    def __str__(self, *args, **kwargs):
+    def __str__(self):
         return f"{self.orden} — {self.repuesto} x{self.cantidad}"
