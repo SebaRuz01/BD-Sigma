@@ -1,4 +1,5 @@
 from rest_framework.permissions import BasePermission
+
 from .models import ModuloContratado
 
 
@@ -8,6 +9,7 @@ class TieneModuloActivo(BasePermission):
     tiene contratado y activo el módulo indicado en `modulo_requerido`
     del ViewSet que use este permiso.
     """
+
     message = "Tu taller no tiene contratado este módulo."
 
     def has_permission(self, request, view):
@@ -29,11 +31,6 @@ class TieneModuloActivo(BasePermission):
         if usuario.taller_id is None:
             return False
 
-        # Validación extra de estado del taller
-        if hasattr(usuario, 'taller') and usuario.taller and usuario.taller.estado == 'suspendido':
-            self.message = "Tu taller está suspendido. Contacta a soporte para reactivarlo."
-            return False
-
         return ModuloContratado.objects.filter(
             taller_id=usuario.taller_id,
             modulo__slug=modulo_slug,
@@ -48,21 +45,40 @@ class EsSuperAdmin(BasePermission):
         usuario = request.user
         return usuario.is_authenticated and usuario.rol == 'super_admin'
 
+class TieneModuloActivo(BasePermission):
+    message = "Tu taller no tiene contratado este módulo."
+
+    def has_permission(self, request, view):
+        modulo_slug = getattr(view, 'modulo_requerido', None)
+        if modulo_slug is None:
+            return True
+
+        usuario = request.user
+        if not usuario.is_authenticated:
+            return False
+
+        if usuario.taller_id is None and usuario.rol == 'super_admin':
+            return True
+
+        if usuario.taller_id is None:
+            return False
+
+        if usuario.taller.estado == 'suspendido':
+            self.message = "Tu taller está suspendido. Contacta a soporte para reactivarlo."
+            return False
+
+        return ModuloContratado.objects.filter(
+            taller_id=usuario.taller_id,
+            modulo__slug=modulo_slug,
+            activo=True
+        ).exists()
 
 class EsAdminTaller(BasePermission):
     message = "Solo el administrador del taller puede realizar esta acción."
 
     def has_permission(self, request, view):
-        usuario = request.user
-        if not usuario.is_authenticated:
-            return False
-            
-        # Super-admin siempre pasa
-        if usuario.rol == 'super_admin' or usuario.is_superuser:
+        # Para lectura y creación, cualquier usuario autenticado del taller pasa.
+        if request.method not in ('DELETE',):
             return True
-            
-        # Para métodos destructivos o de modificación crítica, restringir a admin_taller
-        if request.method in ('PUT', 'PATCH', 'DELETE'):
-            return usuario.rol == 'admin_taller'
-            
-        return True
+        usuario = request.user
+        return usuario.is_authenticated and usuario.rol in ('admin_taller', 'super_admin')
