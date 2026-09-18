@@ -9,7 +9,7 @@ from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from rest_framework.exceptions import ValidationError
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
-    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, Cliente, Vehiculo
+    Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto, Cliente
 )
 from .serializers import (
     TallerSerializer, UsuarioSerializer,
@@ -127,19 +127,18 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         cliente_rut = self.request.data.get('cliente_rut', '')
         cliente_email = self.request.data.get('cliente_email')
         cliente_telefono = self.request.data.get('cliente_telefono', '')
-        cliente_calle = self.request.data.get('cliente_calle', '')
-        cliente_numero = self.request.data.get('cliente_numero', '')
-        
-        vehiculo_modelo = self.request.data.get('vehiculo_modelo', 'Vehículo')
+        cliente_direccion = self.request.data.get('cliente_direccion', '')
         patente = self.request.data.get('patente', '')
-        vehiculo_anio = self.request.data.get('vehiculo_anio')
+        equipo = self.request.data.get('equipo', '')
 
-        # 1. Búsqueda o creación del Cliente
+        # Búsqueda prioritaria por RUT primero, luego email y teléfono
         cliente = None
         if cliente_rut:
             cliente = Cliente.objects.filter(taller_id=taller_id, rut=cliente_rut).first()
+        
         if not cliente and cliente_email:
             cliente = Cliente.objects.filter(taller_id=taller_id, email=cliente_email).first()
+        
         if not cliente and cliente_telefono:
             cliente = Cliente.objects.filter(taller_id=taller_id, telefono=cliente_telefono).first()
 
@@ -150,8 +149,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 rut=cliente_rut,
                 email=cliente_email,
                 telefono=cliente_telefono,
-                calle=cliente_calle,
-                numero=cliente_numero
+                direccion=cliente_direccion
             )
         else:
             if cliente_nombre:
@@ -162,31 +160,13 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 cliente.email = cliente_email
             if cliente_telefono:
                 cliente.telefono = cliente_telefono
-            if cliente_calle:
-                cliente.calle = cliente_calle
-            if cliente_numero:
-                cliente.numero = cliente_numero
+            if cliente_direccion:
+                cliente.direccion = cliente_direccion
             cliente.save()
 
-        # 2. Búsqueda o creación del Vehículo asociado al cliente
-        vehiculo = None
-        if patente:
-            vehiculo = Vehiculo.objects.filter(cliente=cliente, patente=patente).first()
+        orden = serializer.save(taller_id=taller_id, cliente=cliente, patente=patente, equipo=equipo)
         
-        if not vehiculo:
-            vehiculo = Vehiculo.objects.create(
-                cliente=cliente,
-                patente=patente,
-                modelo=vehiculo_modelo,
-                anio=vehiculo_anio if vehiculo_anio else None
-            )
-
-        # 3. Guardar la orden vinculada al vehículo y taller
-        orden = serializer.save(taller_id=taller_id, vehiculo=vehiculo)
-        
-        # 4. Envío de correo mediante Brevo
-        cliente_email_dest = orden.vehiculo.cliente.email if orden.vehiculo and orden.vehiculo.cliente else None
-        if cliente_email_dest:
+        if orden.cliente and orden.cliente.email:
             try:
                 url = "https://api.brevo.com/v3/smtp/email"
                 headers = {
@@ -195,23 +175,19 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     "content-type": "application/json"
                 }
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
-                modelo_vehiculo = orden.vehiculo.modelo if orden.vehiculo else "Vehículo"
-                patente_vehiculo = orden.vehiculo.patente if orden.vehiculo and orden.vehiculo.patente else "N/A"
-                cliente_name = orden.vehiculo.cliente.nombre if orden.vehiculo and orden.vehiculo.cliente else "Cliente"
-
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                    "to": [{"email": cliente_email_dest}],
+                    "to": [{"email": orden.cliente.email}],
                     "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
-                        <p>Hola <strong>{cliente_name}</strong>,</p>
-                        <p>Hemos registrado tu vehículo (<strong>{modelo_vehiculo}</strong> - Patente: <strong>{patente_vehiculo}</strong>) en <strong>{nombre_taller}</strong>.</p>
+                        <p>Hola <strong>{orden.cliente.nombre}</strong>,</p>
+                        <p>Hemos registrado tu vehículo/equipo (<strong>{orden.equipo}</strong> - Patente: <strong>{orden.patente or 'N/A'}</strong>) en <strong>{nombre_taller}</strong>.</p>
                         <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
                     """
                 }
                 response = requests.post(url, json=payload, headers=headers)
                 if response.status_code == 201:
-                    print(f"Correo de creación enviado a {cliente_email_dest}")
+                    print(f"Correo de creación enviado a {orden.cliente.email}")
                 else:
                     print(f"Error Brevo al crear orden: {response.text}")
             except Exception as e:
@@ -224,8 +200,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         orden_actualizada = serializer.save()
         
         if estado_anterior != orden_actualizada.estado:
-            cliente_email_dest = orden_actualizada.vehiculo.cliente.email if orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente else None
-            if cliente_email_dest:
+            if orden_actualizada.cliente and orden_actualizada.cliente.email:
                 try:
                     url = "https://api.brevo.com/v3/smtp/email"
                     headers = {
@@ -234,21 +209,19 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "content-type": "application/json"
                     }
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
-                    cliente_name = orden_actualizada.vehiculo.cliente.nombre if orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente else "Cliente"
-
                     payload = {
                         "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                        "to": [{"email": cliente_email_dest}],
+                        "to": [{"email": orden_actualizada.cliente.email}],
                         "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
-                            <p>Hola <strong>{cliente_name}</strong>,</p>
-                            <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
+                            <p>Hola <strong>{orden_actualizada.cliente.nombre}</strong>,</p>
+                            <p>El estado de tu orden en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
                             <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
                         """
                     }
                     response = requests.post(url, json=payload, headers=headers)
                     if response.status_code == 201:
-                        print(f"Correo enviado exitosamente vía Brevo a {cliente_email_dest}")
+                        print(f"Correo enviado exitosamente vía Brevo a {orden_actualizada.cliente.email}")
                     else:
                         print(f"Error de Brevo al enviar correo: {response.text}")
                 except Exception as e:
@@ -276,9 +249,9 @@ class OrdenPublicaView(APIView):
         return Response({
             'id': orden.id,
             'codigo_seguimiento': orden.codigo_seguimiento,
-            'vehiculo_modelo': orden.vehiculo.modelo if orden.vehiculo else None,
-            'vehiculo_patente': orden.vehiculo.patente if orden.vehiculo else None,
+            'equipo': orden.equipo,
+            'patente': orden.patente,
             'estado': orden.estado,
-            'cliente_nombre': orden.vehiculo.cliente.nombre if orden.vehiculo and orden.vehiculo.cliente else None,
+            'cliente_nombre': orden.cliente.nombre if orden.cliente else None,
             'tecnico_nombre': tecnico_nombre,
         })
