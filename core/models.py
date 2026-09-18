@@ -25,8 +25,7 @@ class Taller(models.Model):
     nombre_comercial = models.CharField(max_length=150)
     rut = models.CharField(max_length=20, unique=True)
     rubro = models.CharField(max_length=50)
-    calle = models.CharField(max_length=255, blank=True)
-    numero = models.CharField(max_length=20, blank=True)
+    direccion = models.CharField(max_length=255, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='prueba')
     fecha_alta = models.DateTimeField(auto_now_add=True)
 
@@ -122,8 +121,7 @@ class Cliente(models.Model):
     email = models.EmailField(blank=True, null=True)
     telefono = models.CharField(max_length=30, blank=True)
     rut = models.CharField(max_length=20, blank=True, null=True)
-    calle = models.CharField(max_length=255, blank=True)
-    numero = models.CharField(max_length=20, blank=True)
+    direccion = models.CharField(max_length=255, blank=True)
 
     class Meta:
         db_table = 'core_cliente'
@@ -156,7 +154,11 @@ class OrdenTrabajo(models.Model):
     taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='ordenes_trabajo')
     codigo_seguimiento = models.CharField(max_length=12, unique=True, editable=False, blank=True)
     tecnico = models.ForeignKey(Tecnico, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
-    vehiculo = models.ForeignKey(Vehiculo, on_delete=models.PROTECT, related_name='ordenes', null=True, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes')
+    
+    # Campos que están directamente en la tabla core_ordentrabajo según tu DBeaver
+    equipo = models.CharField(max_length=100, blank=True, null=True)
+    patente = models.CharField(max_length=20, blank=True, null=True)
     
     descripcion_problema = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
@@ -168,7 +170,7 @@ class OrdenTrabajo(models.Model):
         db_table = 'core_ordentrabajo'
 
     def __str__(self):
-        return f"OT-{self.id} — {self.vehiculo}"
+        return f"OT-{self.id} — {self.equipo}"
 
     def save(self, *args, **kwargs):
         if not self.codigo_seguimiento:
