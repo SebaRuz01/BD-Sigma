@@ -8,7 +8,7 @@ class Comuna(models.Model):
     region = models.CharField(max_length=100)
 
     class Meta:
-        db_table = 'comuna'
+        db_table = 'core_comuna'
 
     def __str__(self):
         return f"{self.nombre} ({self.region})"
@@ -31,7 +31,7 @@ class Taller(models.Model):
     fecha_alta = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'taller'
+        db_table = 'core_taller'
 
     def __str__(self):
         return self.nombre_comercial
@@ -52,7 +52,7 @@ class Usuario(AbstractUser):
     rol = models.CharField(max_length=20, choices=ROLES, default='admin_taller')
 
     class Meta:
-        db_table = 'usuario'
+        db_table = 'core_usuario'
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
@@ -64,7 +64,7 @@ class Modulo(models.Model):
     descripcion = models.TextField(blank=True)
 
     class Meta:
-        db_table = 'modulo'
+        db_table = 'core_modulo'
 
     def __str__(self):
         return self.nombre
@@ -78,7 +78,7 @@ class ModuloContratado(models.Model):
     fecha_fin = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'modulocontratado'
+        db_table = 'core_modulocontratado'
         unique_together = ('taller', 'modulo')
 
     def __str__(self):
@@ -92,7 +92,7 @@ class Tecnico(models.Model):
     eficiencia_promedio = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     class Meta:
-        db_table = 'tecnico'
+        db_table = 'core_tecnico'
 
     def __str__(self):
         return f"{self.usuario.username} — {self.especialidad}"
@@ -109,7 +109,7 @@ class Repuesto(models.Model):
     compatibilidades = models.TextField(null=True, blank=True)
 
     class Meta:
-        db_table = 'repuesto'
+        db_table = 'core_repuesto'
 
     def __str__(self):
         return f"{self.nombre} ({self.taller})"
@@ -126,7 +126,7 @@ class Cliente(models.Model):
     numero = models.CharField(max_length=20, blank=True)
 
     class Meta:
-        db_table = 'cliente'
+        db_table = 'core_cliente'
 
     def __str__(self):
         return f"{self.nombre} ({self.telefono})"
@@ -139,7 +139,7 @@ class Vehiculo(models.Model):
     anio = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = 'vehiculo'
+        db_table = 'core_vehiculo'
 
     def __str__(self):
         return f"{self.modelo} ({self.patente})"
@@ -165,7 +165,7 @@ class OrdenTrabajo(models.Model):
     fecha_entrega = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'ordentrabajo'
+        db_table = 'core_ordentrabajo'
 
     def __str__(self):
         return f"OT-{self.id} — {self.vehiculo}"
@@ -189,7 +189,7 @@ class OrdenRepuesto(models.Model):
     cantidad = models.PositiveIntegerField(default=1)
 
     class Meta:
-        db_table = 'ordenrepuesto'
+        db_table = 'core_ordenrepuesto'
 
     def __str__(self, *args, **kwargs):
         return f"{self.orden} — {self.repuesto} x{self.cantidad}"
