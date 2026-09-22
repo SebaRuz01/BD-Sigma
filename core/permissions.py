@@ -81,4 +81,8 @@ class EsAdminTaller(BasePermission):
         if request.method not in ('DELETE',):
             return True
         usuario = request.user
+<<<<<<< HEAD
         return usuario.is_authenticated and usuario.rol in ('admin_taller', 'super_admin')
+=======
+        return usuario.is_authenticated and usuario.rol in ('admin_taller', 'super_admin')
+>>>>>>> 7e6817b1da587f52b1f6b667dee2846aa38e5665

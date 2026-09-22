@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 django
 django-cors-headers
 gunicorn
@@ -10,3 +11,17 @@ django-filter
 daphne
 channels
 resend
+=======
+django
+django-cors-headers
+gunicorn
+psycopg2-binary
+dj-database-url
+python-decouple
+djangorestframework
+djangorestframework-simplejwt
+django-filter
+daphne
+channels
+resend
+>>>>>>> 7e6817b1da587f52b1f6b667dee2846aa38e5665
