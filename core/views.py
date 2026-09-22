@@ -132,7 +132,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         orden = serializer.save()
         
-        # Enviar correo de creación mediante Brevo
         cliente_email = orden.vehiculo.cliente.email if (orden.vehiculo and orden.vehiculo.cliente) else None
         if cliente_email:
             try:
@@ -145,19 +144,52 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 cliente_nombre = orden.vehiculo.cliente.nombre
                 vehiculo_info = f"{orden.vehiculo.modelo} (Patente: {orden.vehiculo.patente})"
-                
-                # Obtener teléfono del técnico si está asignado
                 tecnico_telefono = orden.tecnico.usuario.telefono if (orden.tecnico and orden.tecnico.usuario and orden.tecnico.usuario.telefono) else 'No asignado'
                 
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
                     "to": [{"email": cliente_email}],
-                    "subject": f"Orden creada en {nombre_taller} - Código: {orden.codigo_seguimiento}",
+                    "subject": f"Ingreso registrado en {nombre_taller} - Código: {orden.codigo_seguimiento}",
                     "htmlContent": f"""
-                        <p>Hola <strong>{cliente_nombre}</strong>,</p>
-                        <p>Hemos registrado tu vehículo (<strong>{vehiculo_info}</strong>) en <strong>{nombre_taller}</strong>.</p>
-                        <p>Teléfono de contacto del técnico asignado: <strong>{tecnico_telefono}</strong></p>
-                        <p>Puedes hacer seguimiento del estado de tu orden en tiempo real utilizando tu código único: <strong>{orden.codigo_seguimiento}</strong></p>
+                    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
+                        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                            
+                            <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
+                                <!-- CAMBIA EL SRC DE ESTA IMAGEN POR TU ENLACE PÚBLICO -->
+                                <img src="https://tu-enlace-publico.com/logo.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                                <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
+                            </div>
+                            
+                            <div style="padding: 40px 30px;">
+                                <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
+                                <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
+                                    Hemos registrado exitosamente tu vehículo en <strong>{nombre_taller}</strong>.
+                                </p>
+                                
+                                <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Detalles del Ingreso</p>
+                                    <p style="margin: 0 0 8px 0; font-size: 16px; color: #334155;"><strong>Vehículo:</strong> {vehiculo_info}</p>
+                                    <p style="margin: 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> {tecnico_telefono}</p>
+                                </div>
+                                
+                                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
+                                
+                                <div style="text-align: center;">
+                                    <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Tu código único para seguimiento en línea:</p>
+                                    <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
+                                        {orden.codigo_seguimiento}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                                <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                                    Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
+                                </p>
+                            </div>
+                            
+                        </div>
+                    </div>
                     """
                 }
                 response = requests.post(url, json=payload, headers=headers)
@@ -193,10 +225,52 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "to": [{"email": cliente_email}],
                         "subject": f"Actualización en {nombre_taller} - Orden {orden_actualizada.codigo_seguimiento}",
                         "htmlContent": f"""
-                            <p>Hola <strong>{cliente_nombre}</strong>,</p>
-                            <p>El estado de tu vehículo en <strong>{nombre_taller}</strong> ha cambiado a: <strong>{orden_actualizada.estado}</strong>.</p>
-                            <p>Teléfono de contacto del técnico asignado: <strong>{tecnico_telefono}</strong></p>
-                            <p>Puedes revisar el progreso en tiempo real usando tu código de seguimiento único: <strong>{orden_actualizada.codigo_seguimiento}</strong></p>
+                        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
+                            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                                
+                                <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
+                                    <!-- CAMBIA EL SRC DE ESTA IMAGEN POR TU ENLACE PÚBLICO -->
+                                    <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                                    <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
+                                </div>
+                                
+                                <div style="padding: 40px 30px;">
+                                    <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
+                                    <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
+                                        El estado de tu vehículo en <strong>{nombre_taller}</strong> ha sido actualizado.
+                                    </p>
+                                    
+                                    <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
+                                        <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Nuevo Estado</p>
+                                        <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900; text-transform: capitalize;">
+                                            {orden_actualizada.estado}
+                                        </p>
+                                    </div>
+                                    
+                                    <div style="background-color: #f8fafc; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                        <p style="margin: 0; font-size: 15px; color: #334155;">
+                                            <strong>Técnico asignado:</strong> {tecnico_telefono}
+                                        </p>
+                                    </div>
+                                    
+                                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
+                                    
+                                    <div style="text-align: center;">
+                                        <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Tu código único de seguimiento en tiempo real:</p>
+                                        <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
+                                            {orden_actualizada.codigo_seguimiento}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                                    <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                                        Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
+                                    </p>
+                                </div>
+                                
+                            </div>
+                        </div>
                         """
                     }
                     response = requests.post(url, json=payload, headers=headers)
