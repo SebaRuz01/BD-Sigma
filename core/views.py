@@ -155,8 +155,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
                             
                             <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
-                                <!-- CAMBIA EL SRC DE ESTA IMAGEN POR TU ENLACE PÚBLICO -->
-                                <img src="https://tu-enlace-publico.com/logo.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                                <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                                 <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                             </div>
                             
@@ -229,7 +228,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
                                 
                                 <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
-                                    <!-- CAMBIA EL SRC DE ESTA IMAGEN POR TU ENLACE PÚBLICO -->
                                     <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                                     <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                                 </div>
