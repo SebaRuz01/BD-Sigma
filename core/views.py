@@ -143,7 +143,9 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 }
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 cliente_nombre = orden.vehiculo.cliente.nombre
-                vehiculo_info = f"{orden.vehiculo.modelo} (Patente: {orden.vehiculo.patente})"
+                
+                # Se limpia la variable para mostrar únicamente la patente
+                vehiculo_info = orden.vehiculo.patente if orden.vehiculo else "No registrada"
                 
                 if orden.tecnico and orden.tecnico.usuario:
                     t_nombre = f"{orden.tecnico.usuario.first_name} {orden.tecnico.usuario.last_name}".strip() or orden.tecnico.usuario.username
@@ -229,6 +231,20 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     cliente_nombre = orden_actualizada.vehiculo.cliente.nombre
                     
+                    # Diccionario para formatear los estados de la base de datos
+                    diccionario_estados = {
+                        'recibido': 'Recibido',
+                        'diagnostico': 'Diagnóstico',
+                        'en_reparacion': 'En Reparación',
+                        'listo_para_retiro': 'Listo para Retiro',
+                        'entregado': 'Entregado'
+                    }
+                    # Si el estado no está en el diccionario, quita los guiones bajos y pone mayúsculas
+                    estado_formateado = diccionario_estados.get(
+                        orden_actualizada.estado.lower(), 
+                        orden_actualizada.estado.replace('_', ' ').title()
+                    )
+                    
                     if orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
                         t_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
                         t_email = orden_actualizada.tecnico.usuario.email or "No registrado"
@@ -262,8 +278,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                     
                                     <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
                                         <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Nuevo Estado</p>
-                                        <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900; text-transform: capitalize;">
-                                            {orden_actualizada.estado}
+                                        <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900;">
+                                            {estado_formateado}
                                         </p>
                                     </div>
                                     
