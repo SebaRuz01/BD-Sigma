@@ -144,7 +144,19 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 cliente_nombre = orden.vehiculo.cliente.nombre
                 vehiculo_info = f"{orden.vehiculo.modelo} (Patente: {orden.vehiculo.patente})"
-                tecnico_telefono = orden.tecnico.usuario.telefono if (orden.tecnico and orden.tecnico.usuario and orden.tecnico.usuario.telefono) else 'No asignado'
+                
+                # Extracción mejorada de los datos del técnico
+                if orden.tecnico and orden.tecnico.usuario:
+                    t_nombre = f"{orden.tecnico.usuario.first_name} {orden.tecnico.usuario.last_name}".strip() or orden.tecnico.usuario.username
+                    t_email = orden.tecnico.usuario.email or "No registrado"
+                    t_telefono = orden.tecnico.usuario.telefono or "No registrado"
+                    tecnico_html = f"""
+                        <p style="margin: 0 0 5px 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
+                        <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;">✉️ {t_email}</p>
+                        <p style="margin: 0; font-size: 14px; color: #475569;">📱 {t_telefono}</p>
+                    """
+                else:
+                    tecnico_html = '<p style="margin: 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> No asignado</p>'
                 
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
@@ -167,8 +179,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                 
                                 <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
                                     <p style="margin: 0 0 10px 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Detalles del Ingreso</p>
-                                    <p style="margin: 0 0 8px 0; font-size: 16px; color: #334155;"><strong>Vehículo:</strong> {vehiculo_info}</p>
-                                    <p style="margin: 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> {tecnico_telefono}</p>
+                                    <p style="margin: 0 0 15px 0; font-size: 16px; color: #334155; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0;"><strong>Vehículo:</strong> {vehiculo_info}</p>
+                                    {tecnico_html}
                                 </div>
                                 
                                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
@@ -217,7 +229,19 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     }
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     cliente_nombre = orden_actualizada.vehiculo.cliente.nombre
-                    tecnico_telefono = orden_actualizada.tecnico.usuario.telefono if (orden_actualizada.tecnico and orden_actualizada.tecnico.usuario and orden_actualizada.tecnico.usuario.telefono) else 'No asignado'
+                    
+                    # Extracción de datos del técnico para correo de actualización
+                    if orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
+                        t_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
+                        t_email = orden_actualizada.tecnico.usuario.email or "No registrado"
+                        t_telefono = orden_actualizada.tecnico.usuario.telefono or "No registrado"
+                        tecnico_html = f"""
+                            <p style="margin: 0 0 5px 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
+                            <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;">✉️ {t_email}</p>
+                            <p style="margin: 0; font-size: 14px; color: #475569;">📱 {t_telefono}</p>
+                        """
+                    else:
+                        tecnico_html = '<p style="margin: 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> No asignado</p>'
 
                     payload = {
                         "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
@@ -246,9 +270,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                     </div>
                                     
                                     <div style="background-color: #f8fafc; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
-                                        <p style="margin: 0; font-size: 15px; color: #334155;">
-                                            <strong>Técnico asignado:</strong> {tecnico_telefono}
-                                        </p>
+                                        {tecnico_html}
                                     </div>
                                     
                                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
