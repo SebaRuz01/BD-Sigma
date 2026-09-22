@@ -145,18 +145,17 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 cliente_nombre = orden.vehiculo.cliente.nombre
                 vehiculo_info = f"{orden.vehiculo.modelo} (Patente: {orden.vehiculo.patente})"
                 
-                # Extracción mejorada de los datos del técnico
                 if orden.tecnico and orden.tecnico.usuario:
                     t_nombre = f"{orden.tecnico.usuario.first_name} {orden.tecnico.usuario.last_name}".strip() or orden.tecnico.usuario.username
                     t_email = orden.tecnico.usuario.email or "No registrado"
                     t_telefono = orden.tecnico.usuario.telefono or "No registrado"
                     tecnico_html = f"""
-                        <p style="margin: 0 0 5px 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
-                        <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;">✉️ {t_email}</p>
-                        <p style="margin: 0; font-size: 14px; color: #475569;">📱 {t_telefono}</p>
+                        <p style="margin: 0 0 5px 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
+                        <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;"><strong>Correo:</strong> {t_email}</p>
+                        <p style="margin: 0; font-size: 14px; color: #475569;"><strong>Teléfono:</strong> {t_telefono}</p>
                     """
                 else:
-                    tecnico_html = '<p style="margin: 0; font-size: 16px; color: #334155;"><strong>Técnico asignado:</strong> No asignado</p>'
+                    tecnico_html = '<p style="margin: 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> No asignado</p>'
                 
                 payload = {
                     "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
@@ -230,15 +229,14 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     cliente_nombre = orden_actualizada.vehiculo.cliente.nombre
                     
-                    # Extracción de datos del técnico para correo de actualización
                     if orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
                         t_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
                         t_email = orden_actualizada.tecnico.usuario.email or "No registrado"
                         t_telefono = orden_actualizada.tecnico.usuario.telefono or "No registrado"
                         tecnico_html = f"""
                             <p style="margin: 0 0 5px 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
-                            <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;">✉️ {t_email}</p>
-                            <p style="margin: 0; font-size: 14px; color: #475569;">📱 {t_telefono}</p>
+                            <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;"><strong>Correo:</strong> {t_email}</p>
+                            <p style="margin: 0; font-size: 14px; color: #475569;"><strong>Teléfono:</strong> {t_telefono}</p>
                         """
                     else:
                         tecnico_html = '<p style="margin: 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> No asignado</p>'
