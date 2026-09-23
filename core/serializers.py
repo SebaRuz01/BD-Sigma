@@ -99,6 +99,7 @@ class TecnicoSerializer(serializers.ModelSerializer):
     nombre = serializers.SerializerMethodField()
     email = serializers.EmailField(source='usuario.email', read_only=True)
     telefono = serializers.CharField(source='usuario.telefono', read_only=True)
+    vehiculos = serializers.SerializerMethodField()
 
     class Meta:
         model = Tecnico
@@ -107,6 +108,28 @@ class TecnicoSerializer(serializers.ModelSerializer):
     def get_nombre(self, obj):
         nombre_completo = f"{obj.usuario.first_name} {obj.usuario.last_name}".strip()
         return nombre_completo or obj.usuario.username
+
+    def get_vehiculos(self, obj):
+        # Consultamos las órdenes de trabajo y traemos el vehículo y el cliente relacionado
+        ordenes = OrdenTrabajo.objects.filter(tecnico=obj, vehiculo__isnull=False).select_related('vehiculo', 'vehiculo__cliente')
+        vehiculos_lista = []
+        patentes_vistas = set()
+        
+        for orden in ordenes:
+            vehiculo = orden.vehiculo
+            if vehiculo and vehiculo.patente not in patentes_vistas:
+                patentes_vistas.add(vehiculo.patente)
+                # Obtenemos el nombre del cliente a través del vehículo o de la orden
+                cliente_nombre = "Sin nombre"
+                if vehiculo.cliente and vehiculo.cliente.nombre:
+                    cliente_nombre = vehiculo.cliente.nombre
+                
+                vehiculos_lista.append({
+                    'patente': vehiculo.patente,
+                    'modelo': vehiculo.modelo or 'Vehículo',
+                    'cliente_nombre': cliente_nombre
+                })
+        return vehiculos_lista
 
 
 class TecnicoCreateSerializer(serializers.ModelSerializer):
