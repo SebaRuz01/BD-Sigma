@@ -97,6 +97,14 @@ class Repuesto(models.Model):
     modelo = models.CharField(max_length=100, blank=True)
     compatibilidades = models.TextField(blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['taller', 'nombre', 'compatibilidades'], 
+                name='unique_repuesto_por_taller'
+            )
+        ]
+
     def __str__(self):
         return f"{self.nombre} ({self.taller})"
 
