@@ -163,6 +163,25 @@ class OrdenRepuesto(models.Model):
 
     class Meta:
         unique_together = ('orden', 'repuesto')
+        
+class Cita(models.Model):
+    ESTADOS_CITA = [
+        ('pendiente', 'Pendiente'),
+        ('confirmada', 'Confirmada'),
+        ('cancelada', 'Cancelada'),
+        ('completada', 'Completada'),
+    ]
 
+    taller = models.ForeignKey(Taller, on_delete=models.CASCADE, related_name='citas')
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='citas')
+    vehiculo = models.ForeignKey(Vehiculo, on_delete=models.SET_NULL, null=True, blank=True, related_name='citas')
+    
+    fecha_hora = models.DateTimeField()
+    motivo = models.TextField(help_text="Descripción del problema o servicio solicitado")
+    estado = models.CharField(max_length=20, choices=ESTADOS_CITA, default='pendiente')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Cita {self.id} — {self.cliente.nombre} ({self.estado})"
     def __str__(self):
         return f"{self.orden} — {self.repuesto} x{self.cantidad}"
