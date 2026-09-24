@@ -80,24 +80,22 @@ class ModuloContratadoSerializer(serializers.ModelSerializer):
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
-    # Declaramos los campos extra para que la app móvil los pueda enviar
+    # Declaramos los campos extra
     password = serializers.CharField(write_only=True, required=False)
     first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True) # <-- Agregado
     telefono = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Usuario
-        # Ahora Django sí aceptará el nombre, el teléfono y la clave
-        fields = ['id', 'username', 'email', 'rol', 'taller', 'password', 'first_name', 'telefono']
+        # Incluimos last_name en la lista
+        fields = ['id', 'username', 'email', 'rol', 'taller', 'password', 'first_name', 'last_name', 'telefono']
 
     def create(self, validated_data):
-        # 1. Sacamos la contraseña en texto plano de los datos recibidos
         password = validated_data.pop('password', None)
-        
-        # 2. Creamos el registro del usuario en la base de datos
         usuario = super().create(validated_data)
         
-        # 3. ENCRIPTAMOS LA CONTRASEÑA (Este es el paso que arregla el login)
+        # Encriptamos la clave
         if password:
             usuario.set_password(password)
             usuario.save()
