@@ -40,6 +40,7 @@ class Usuario(AbstractUser):
         ('admin_taller', 'Admin de Taller'),
         ('tecnico', 'Técnico'),
         ('recepcionista', 'Recepcionista'),
+        ('cliente', 'Cliente'),
     ]
 
     taller = models.ForeignKey(
