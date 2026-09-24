@@ -27,7 +27,17 @@ from .serializers import (
 
 class TallerViewSet(viewsets.ModelViewSet):
     queryset = Taller.objects.all()
-    permission_classes = [IsAuthenticated, EsSuperAdmin]
+
+    # Usamos permisos dinámicos en lugar de uno fijo para toda la clase
+    def get_permissions(self):
+        # Si la acción es 'list' (ver todos) o 'retrieve' (ver un taller específico)
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated] # Cualquier cliente o técnico logueado puede verlos
+        else:
+            # Para crear, editar o borrar talleres, seguimos exigiendo ser SuperAdmin
+            permission_classes = [IsAuthenticated, EsSuperAdmin]
+        
+        return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
         if self.action == 'create':
