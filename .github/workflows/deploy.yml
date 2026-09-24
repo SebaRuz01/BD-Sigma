@@ -1,0 +1,27 @@
+name: Revisión y Deploy a Render
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  revisar-y-desplegar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10' # Cambia esto si usas otra versión de Python
+
+      - name: Prueba de instalación de librerías
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Activar Deploy en Render
+        if: success()
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
