@@ -1,5 +1,6 @@
 import os
 import requests
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -128,34 +129,40 @@ class RepuestoViewSet(viewsets.ModelViewSet):
         compatibilidades = request.data.get('compatibilidades', '').strip()
         modelo = request.data.get('modelo', '').strip()
         
-        # Manejamos el año (como puede venir vacío, aseguramos que sea número o None)
-        anio_raw = request.data.get('anio')
-        anio = int(anio_raw) if anio_raw else None
-        
-        # Manejamos el stock a sumar
         try:
             stock_a_sumar = int(request.data.get('stock_actual', 0))
         except (ValueError, TypeError):
             stock_a_sumar = 0
 
-        # Buscamos la coincidencia exacta de TODO: nombre, compatibilidades, modelo y año
-        repuesto_existente = Repuesto.objects.filter(
-            taller_id=taller_id,
-            nombre__iexact=nombre,
-            compatibilidades__iexact=compatibilidades,
-            modelo__iexact=modelo,
-            anio=anio
-        ).first()
+        # 1. Regla base: SIEMPRE debe ser del mismo taller y tener el mismo nombre exacto
+        query = Q(taller_id=taller_id, nombre__iexact=nombre)
+
+        # 2. Regla flexible: Que coincida el modelo "O" la compatibilidad
+        condiciones_or = Q()
+        if modelo:
+            condiciones_or |= Q(modelo__iexact=modelo)
+        if compatibilidades:
+            condiciones_or |= Q(compatibilidades__iexact=compatibilidades)
+
+        # Si el usuario escribió algo en modelo o compatibilidad, aplicamos el "OR"
+        if condiciones_or:
+            query &= condiciones_or
+        else:
+            # Si dejó ambos en blanco, buscamos uno que también los tenga en blanco
+            query &= Q(modelo__iexact='', compatibilidades__iexact='')
+
+        # Ejecutamos la búsqueda con estas nuevas reglas
+        repuesto_existente = Repuesto.objects.filter(query).first()
 
         if repuesto_existente:
-            # Si TODO coincide, le sumamos el stock
+            # ¡Coincidió! Ya sea por el modelo o por la compatibilidad. Sumamos el stock.
             repuesto_existente.stock_actual += stock_a_sumar
             repuesto_existente.save()
             
             serializer = self.get_serializer(repuesto_existente)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        # Si cambia el nombre, el modelo, el año o las compatibilidades, crea uno nuevo
+        # Si no coincidió ni por modelo ni por compatibilidad, es un repuesto nuevo
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
