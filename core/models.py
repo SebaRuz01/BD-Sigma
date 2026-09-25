@@ -48,7 +48,7 @@ class Usuario(AbstractUser):
         related_name='usuarios'
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='admin_taller')
-    telefono = models.CharField(max_length=30, blank=True) # <-- Nuevo campo añadido aquí
+    telefono = models.CharField(max_length=30, blank=True)
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
@@ -172,6 +172,10 @@ class OrdenRepuesto(models.Model):
     class Meta:
         unique_together = ('orden', 'repuesto')
         
+    def __str__(self):
+        return f"{self.orden} — {self.repuesto} x{self.cantidad}"
+
+
 class Cita(models.Model):
     ESTADOS_CITA = [
         ('pendiente', 'Pendiente'),
@@ -191,5 +195,3 @@ class Cita(models.Model):
 
     def __str__(self):
         return f"Cita {self.id} — {self.cliente.nombre} ({self.estado})"
-    def __str__(self):
-        return f"{self.orden} — {self.repuesto} x{self.cantidad}"
