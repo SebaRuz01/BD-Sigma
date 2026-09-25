@@ -80,22 +80,22 @@ class ModuloContratadoSerializer(serializers.ModelSerializer):
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
-    # Declaramos los campos extra
+    # Declaramos los campos extra agregados por tu compañero
     password = serializers.CharField(write_only=True, required=False)
     first_name = serializers.CharField(required=False, allow_blank=True)
-    last_name = serializers.CharField(required=False, allow_blank=True) # <-- Agregado
+    last_name = serializers.CharField(required=False, allow_blank=True)
     telefono = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Usuario
-        # Incluimos last_name en la lista
+        # Incluimos los nuevos campos en la lista
         fields = ['id', 'username', 'email', 'rol', 'taller', 'password', 'first_name', 'last_name', 'telefono']
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         usuario = super().create(validated_data)
         
-        # Encriptamos la clave
+        # Encriptamos la clave (mejora de tu compañero)
         if password:
             usuario.set_password(password)
             usuario.save()
