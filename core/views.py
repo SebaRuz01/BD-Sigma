@@ -1,6 +1,6 @@
 import os
 import requests
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -119,6 +119,36 @@ class RepuestoViewSet(viewsets.ModelViewSet):
         if usuario.taller_id is None:
             return Repuesto.objects.all()
         return Repuesto.objects.filter(taller_id=usuario.taller_id)
+
+    def create(self, request, *args, **kwargs):
+        taller_id = request.user.taller_id
+        nombre = request.data.get('nombre')
+        # Maneja el caso en que compatibilidades venga vacío
+        compatibilidades = request.data.get('compatibilidades', '')
+        
+        try:
+            stock_a_sumar = int(request.data.get('stock_actual', 0))
+        except (ValueError, TypeError):
+            stock_a_sumar = 0
+
+        # Buscamos si ya existe el repuesto exacto en el mismo taller
+        repuesto_existente = Repuesto.objects.filter(
+            taller_id=taller_id,
+            nombre=nombre,
+            compatibilidades=compatibilidades
+        ).first()
+
+        if repuesto_existente:
+            # Si existe, simplemente le sumamos el stock y guardamos
+            repuesto_existente.stock_actual += stock_a_sumar
+            repuesto_existente.save()
+            
+            # Devolvemos la respuesta para que el frontend se actualice
+            serializer = self.get_serializer(repuesto_existente)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # Si no existe, dejamos que siga el flujo normal de creación original
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(taller_id=self.request.user.taller_id)
