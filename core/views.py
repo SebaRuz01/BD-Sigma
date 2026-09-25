@@ -122,32 +122,40 @@ class RepuestoViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         taller_id = request.user.taller_id
-        nombre = request.data.get('nombre')
-        # Maneja el caso en que compatibilidades venga vacío
-        compatibilidades = request.data.get('compatibilidades', '')
         
+        # Obtenemos y limpiamos los campos de texto
+        nombre = request.data.get('nombre', '').strip()
+        compatibilidades = request.data.get('compatibilidades', '').strip()
+        modelo = request.data.get('modelo', '').strip()
+        
+        # Manejamos el año (como puede venir vacío, aseguramos que sea número o None)
+        anio_raw = request.data.get('anio')
+        anio = int(anio_raw) if anio_raw else None
+        
+        # Manejamos el stock a sumar
         try:
             stock_a_sumar = int(request.data.get('stock_actual', 0))
         except (ValueError, TypeError):
             stock_a_sumar = 0
 
-        # Buscamos si ya existe el repuesto exacto en el mismo taller
+        # Buscamos la coincidencia exacta de TODO: nombre, compatibilidades, modelo y año
         repuesto_existente = Repuesto.objects.filter(
             taller_id=taller_id,
-            nombre=nombre,
-            compatibilidades=compatibilidades
+            nombre__iexact=nombre,
+            compatibilidades__iexact=compatibilidades,
+            modelo__iexact=modelo,
+            anio=anio
         ).first()
 
         if repuesto_existente:
-            # Si existe, simplemente le sumamos el stock y guardamos
+            # Si TODO coincide, le sumamos el stock
             repuesto_existente.stock_actual += stock_a_sumar
             repuesto_existente.save()
             
-            # Devolvemos la respuesta para que el frontend se actualice
             serializer = self.get_serializer(repuesto_existente)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        # Si no existe, dejamos que siga el flujo normal de creación original
+        # Si cambia el nombre, el modelo, el año o las compatibilidades, crea uno nuevo
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
