@@ -6,7 +6,7 @@ from .views import (
     TecnicoViewSet, RepuestoViewSet,
     OrdenTrabajoViewSet, OrdenRepuestoViewSet,
     ComunaViewSet, ClienteViewSet, VehiculoViewSet,
-    OrdenPublicaView
+    OrdenPublicaView, CitaViewSet
 )
 
 router = DefaultRouter()
@@ -21,6 +21,7 @@ router.register(r'ordenes', OrdenTrabajoViewSet, basename='orden')
 router.register(r'comunas', ComunaViewSet)
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'vehiculos', VehiculoViewSet, basename='vehiculo')
+router.register(r'citas', CitaViewSet, basename='cita')
 
 urlpatterns = router.urls + [
     path('publico/ordenes/<str:codigo>/', OrdenPublicaView.as_view()),

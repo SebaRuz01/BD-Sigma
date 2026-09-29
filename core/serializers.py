@@ -3,7 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
     Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto,
-    Comuna, Cliente, Vehiculo
+    Comuna, Cliente, Vehiculo, Cita
 )
 
 
@@ -302,3 +302,58 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
             vehiculo.save()
 
         return OrdenTrabajo.objects.create(taller=taller, vehiculo=vehiculo, **validated_data)
+
+class CitaSerializer(serializers.ModelSerializer):
+    taller_id = serializers.PrimaryKeyRelatedField(source='taller', queryset=Taller.objects.all())
+    patente = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    modelo_vehiculo = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    taller_nombre = serializers.CharField(source='taller.nombre_comercial', read_only=True)
+    cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
+    vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only=True, default=None)
+
+    class Meta:
+        model = Cita
+        fields = [
+            'id', 'fecha_hora', 'motivo', 'estado', 'fecha_creacion',
+            'taller_id', 'taller_nombre', 'cliente_nombre', 'vehiculo_patente',
+            'patente', 'modelo_vehiculo',
+        ]
+        read_only_fields = ['id', 'fecha_creacion']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        taller = validated_data['taller']
+        patente = (validated_data.pop('patente', '') or '').upper().strip()
+        modelo = (validated_data.pop('modelo_vehiculo', '') or '').strip()
+        validated_data.pop('estado', None)  # siempre nace 'pendiente'
+
+        # Cliente asociado a este usuario en este taller
+        nombre = f"{user.first_name} {user.last_name}".strip() or user.username
+        cliente, _ = Cliente.objects.get_or_create(
+            taller=taller,
+            rut=f"APP-{user.id}",
+            defaults={
+                'nombre': nombre,
+                'email': user.email or '',
+                'telefono': user.telefono or '',
+            },
+        )
+
+        # Vehículo (patente es única global; no tocamos vehículos de otros clientes)
+        vehiculo = None
+        if patente and patente != 'S/P':
+            vehiculo = Vehiculo.objects.filter(patente=patente).first()
+            if vehiculo is None:
+                vehiculo = Vehiculo.objects.create(patente=patente, cliente=cliente, modelo=modelo)
+            elif vehiculo.cliente_id != cliente.id:
+                vehiculo = None
+
+        # Si no se pudo enlazar un vehículo, guardamos la info en el motivo
+        if vehiculo is None and (modelo or patente):
+            info = f"[Vehículo: {modelo or 'sin modelo'} {patente}]".replace('  ', ' ')
+            validated_data['motivo'] = f"{info} {validated_data.get('motivo', '')}".strip()
+
+        return Cita.objects.create(
+            cliente=cliente, vehiculo=vehiculo, estado='pendiente', **validated_data
+        )

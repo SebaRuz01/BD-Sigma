@@ -12,7 +12,7 @@ from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
     Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto,
-    Comuna, Cliente, Vehiculo
+    Comuna, Cliente, Vehiculo, Cita
 )
 from .serializers import (
     TallerSerializer, UsuarioSerializer,
@@ -22,7 +22,7 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     TecnicoCreateSerializer,
     TallerCreateSerializer,
-    ComunaSerializer, ClienteSerializer, VehiculoSerializer,
+    ComunaSerializer, ClienteSerializer, VehiculoSerializer, CitaSerializer
 )
 
 
@@ -425,3 +425,22 @@ class OrdenPublicaView(APIView):
             'cliente_nombre': orden.vehiculo.cliente.nombre,
             'tecnico_nombre': tecnico_nombre,
         })
+
+class CitaViewSet(viewsets.ModelViewSet):
+    serializer_class = CitaSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        u = self.request.user
+        qs = Cita.objects.select_related('taller', 'cliente', 'vehiculo')
+        if u.rol == 'cliente':
+            return qs.filter(cliente__rut=f"APP-{u.id}")
+        if u.taller_id is None:      # super_admin
+            return qs
+        return qs.filter(taller_id=u.taller_id)
+
+    def perform_update(self, serializer):
+        u = self.request.user
+        if u.rol == 'cliente' and serializer.validated_data.get('estado', 'cancelada') != 'cancelada':
+            raise ValidationError('Solo puedes cancelar tus citas.')
+        serializer.save()
