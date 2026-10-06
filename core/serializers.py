@@ -350,4 +350,48 @@ class CitaSerializer(serializers.ModelSerializer):
 
     taller_nombre = serializers.CharField(source='taller.nombre_comercial', read_only=True)
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
-    vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only
+    # AQUÍ ESTABA EL ERROR DEL PARÉNTESIS, YA ESTÁ CORREGIDO.
+    vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only=True, default=None)
+
+    class Meta:
+        model = Cita
+        fields = [
+            'id', 'fecha_hora', 'motivo', 'estado', 'fecha_creacion',
+            'taller_id', 'taller_nombre', 'cliente_nombre', 'vehiculo_patente',
+            'patente', 'modelo_vehiculo',
+        ]
+        read_only_fields = ['id', 'fecha_creacion']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        taller = validated_data['taller']
+        patente = (validated_data.pop('patente', '') or '').upper().strip()
+        modelo = (validated_data.pop('modelo_vehiculo', '') or '').strip()
+        validated_data.pop('estado', None)  
+
+        nombre = f"{user.first_name} {user.last_name}".strip() or user.username
+        cliente, _ = Cliente.objects.get_or_create(
+            taller=taller,
+            rut=f"APP-{user.id}",
+            defaults={
+                'nombre': nombre,
+                'email': user.email or '',
+                'telefono': user.telefono or '',
+            },
+        )
+
+        vehiculo = None
+        if patente and patente != 'S/P':
+            vehiculo = Vehiculo.objects.filter(patente=patente).first()
+            if vehiculo is None:
+                vehiculo = Vehiculo.objects.create(patente=patente, cliente=cliente, modelo=modelo)
+            elif vehiculo.cliente_id != cliente.id:
+                vehiculo = None
+
+        if vehiculo is None and (modelo or patente):
+            info = f"[Vehículo: {modelo or 'sin modelo'} {patente}]".replace('  ', ' ')
+            validated_data['motivo'] = f"{info} {validated_data.get('motivo', '')}".strip()
+
+        return Cita.objects.create(
+            cliente=cliente, vehiculo=vehiculo, estado='pendiente', **validated_data
+        )
