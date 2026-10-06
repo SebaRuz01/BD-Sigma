@@ -109,16 +109,23 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # 1. Django valida que el usuario y la contraseña sean correctos
         data = super().validate(attrs)
 
-        # 2. REGLA DE BLOQUEO: Si el rol del usuario en la BD es 'cliente', lo pateamos
+        # 2. REGLA DE BLOQUEO: Si el rol es 'cliente', cortamos el login con error 401
         if self.user.rol == 'cliente':
             raise AuthenticationFailed('Los clientes no tienen permisos para iniciar sesión en este sistema.')
-
-        # 3. Si no es cliente (es admin, tecnico, etc), le armamos su token para que entre
-        data['taller_id'] = self.user.taller_id
-        data['rol'] = self.user.rol
-        data['username'] = self.user.username
         
         return data
+
+    @classmethod
+    def get_token(cls, user):
+        # 3. Generamos el token original
+        token = super().get_token(user)
+
+        # 4. Le inyectamos los datos extra AL TOKEN (vital para el frontend)
+        token['taller_id'] = user.taller_id
+        token['rol'] = user.rol
+        token['username'] = user.username
+        
+        return token
 
 
 class TecnicoSerializer(serializers.ModelSerializer):
