@@ -10,9 +10,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.core.mail import send_mail
+from datetime import timedelta
+from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-
+from .ml_modelo import predecir_dias_orden, entrenar_modelo_prediccion
 from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
@@ -536,3 +538,67 @@ class PasswordResetConfirmView(APIView):
             return Response({'mensaje': 'Contraseña actualizada correctamente.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'El enlace ha expirado o es inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CalcularEstimacionIAView(APIView):
+    def post(self, request, pk):
+        try:
+            orden = OrdenTrabajo.objects.get(pk=pk)
+            
+            # Entrenar modelo con órdenes pasadas si hay suficientes
+            entregadas = OrdenTrabajo.objects.filter(estado='entregado')
+            entrenar_modelo_prediccion(entregadas)
+
+            # Extraer variables reales de la orden actual
+            num_repuestos = orden.repuestos_usados.count()
+            tecnico_id = orden.tecnico.id if orden.tecnico else 0
+            descripcion = orden.descripcion_problema or ''
+
+            # Predecir días con la IA
+            dias_predichos = predecir_dias_orden(num_repuestos, tecnico_id, descripcion)
+
+            # Guardar en la orden
+            fecha_base = orden.fecha_recepcion or timezone.now()
+            orden.fecha_estimada = fecha_base + timedelta(days=dias_predichos)
+            orden.save()
+
+            return Response({
+                'success': True,
+                'dias_estimados': dias_predichos,
+                'fecha_estimada': orden.fecha_estimada,
+                'mensaje': f'IA calculó {dias_predichos} días de reparación.'
+            })
+        except OrdenTrabajo.DoesNotExist:
+            return Response({'error': 'Orden no encontrada'}, status=404)
+
+class EnviarCorreoEstimacionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            orden = OrdenTrabajo.objects.get(pk=pk, taller=request.user.taller)
+            
+            if not orden.fecha_estimada:
+                return Response({'error': 'No hay fecha estimada calculada.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            cliente_email = orden.vehiculo.cliente.email if orden.vehiculo and orden.vehiculo.cliente else None
+            
+            if not cliente_email:
+                return Response({'error': 'El cliente no tiene un correo registrado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            fecha_formateada = orden.fecha_estimada.strftime('%d-%m-%Y')
+            asunto = f'Estimación de Entrega - OT-{orden.id:03d} | SIGMA'
+            mensaje = (
+                f'Hola {orden.vehiculo.cliente.nombre},\n\n'
+                f'Le informamos que el diagnóstico de su vehículo ({orden.vehiculo.modelo} - Patente: {orden.vehiculo.patente}) '
+                f'ha finalizado y se han asignado los repuestos necesarios.\n\n'
+                f'La fecha estimada de entrega es el: {fecha_formateada}.\n\n'
+                f'Atentamente,\nEquipo de Taller SIGMA'
+            )
+
+            send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [cliente_email], fail_silently=False)
+
+            return Response({'success': True, 'mensaje': 'Correo enviado exitosamente.'}, status=status.HTTP_200_OK)
+
+        except OrdenTrabajo.DoesNotExist:
+            return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
