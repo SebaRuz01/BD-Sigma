@@ -446,9 +446,9 @@ class PasswordResetRequestView(APIView):
         if not email:
             return Response({'error': 'El correo es obligatorio.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = Usuario.objects.get(email=email)
-        except Usuario.DoesNotExist:
+        # ARREGLO: filter().first() evita que Django crashee si hay correos duplicados en pruebas
+        user = Usuario.objects.filter(email=email).first()
+        if not user:
             return Response({'mensaje': 'Correo enviado si la cuenta existe.'}, status=status.HTTP_200_OK)
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -503,7 +503,8 @@ class PasswordResetRequestView(APIView):
             
             if response.status_code not in [200, 201, 202]:
                 print(f"Error Brevo al enviar recuperación: {response.text}")
-                return Response({'error': 'Hubo un problema con el proveedor de correos.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                # ARREGLO: Enviar el error exacto de Brevo al frontend
+                return Response({'error': f'Error de Brevo: {response.text}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
             print(f"Excepción al conectar con Brevo (recuperación): {e}")
