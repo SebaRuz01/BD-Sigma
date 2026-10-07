@@ -541,12 +541,14 @@ class PasswordResetConfirmView(APIView):
 
 
 class CalcularEstimacionIAView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, pk):
         try:
-            orden = OrdenTrabajo.objects.get(pk=pk)
+            orden = OrdenTrabajo.objects.get(pk=pk, taller=request.user.taller)
             
-            # Entrenar modelo con órdenes pasadas si hay suficientes
-            entregadas = OrdenTrabajo.objects.filter(estado='entregado')
+            # Entrenar modelo con órdenes pasadas de su taller si hay suficientes
+            entregadas = OrdenTrabajo.objects.filter(taller=request.user.taller, estado='entregado')
             entrenar_modelo_prediccion(entregadas)
 
             # Extraer variables reales de la orden actual
@@ -557,19 +559,19 @@ class CalcularEstimacionIAView(APIView):
             # Predecir días con la IA
             dias_predichos = predecir_dias_orden(num_repuestos, tecnico_id, descripcion)
 
-            # Guardar en la orden
-            fecha_base = orden.fecha_recepcion or timezone.now()
-            orden.fecha_estimada = fecha_base + timedelta(days=dias_predichos)
+            # CAMBIO CLAVE: Sumar los días predichos a partir de la fecha y hora ACTUAL (momento del cálculo)
+            orden.fecha_estimada = timezone.now() + timedelta(days=dias_predichos)
             orden.save()
 
             return Response({
                 'success': True,
                 'dias_estimados': dias_predichos,
                 'fecha_estimada': orden.fecha_estimada,
-                'mensaje': f'IA calculó {dias_predichos} días de reparación.'
-            })
+                'mensaje': f'IA calculó {dias_predichos} días a partir de hoy.'
+            }, status=status.HTTP_200_OK)
+            
         except OrdenTrabajo.DoesNotExist:
-            return Response({'error': 'Orden no encontrada'}, status=404)
+            return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
 
 class EnviarCorreoEstimacionView(APIView):
     permission_classes = [IsAuthenticated]
