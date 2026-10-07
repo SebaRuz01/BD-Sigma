@@ -9,7 +9,6 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import force_bytes
-from django.core.mail import send_mail
 from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
@@ -448,7 +447,6 @@ class PasswordResetRequestView(APIView):
         if not email:
             return Response({'error': 'El correo es obligatorio.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ARREGLO: filter().first() evita que Django crashee si hay correos duplicados en pruebas
         user = Usuario.objects.filter(email=email).first()
         if not user:
             return Response({'mensaje': 'Correo enviado si la cuenta existe.'}, status=status.HTTP_200_OK)
@@ -505,7 +503,6 @@ class PasswordResetRequestView(APIView):
             
             if response.status_code not in [200, 201, 202]:
                 print(f"Error Brevo al enviar recuperación: {response.text}")
-                # ARREGLO: Enviar el error exacto de Brevo al frontend
                 return Response({'error': f'Error de Brevo: {response.text}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
@@ -547,19 +544,15 @@ class CalcularEstimacionIAView(APIView):
         try:
             orden = OrdenTrabajo.objects.get(pk=pk, taller=request.user.taller)
             
-            # Entrenar modelo con órdenes pasadas de su taller si hay suficientes
             entregadas = OrdenTrabajo.objects.filter(taller=request.user.taller, estado='entregado')
             entrenar_modelo_prediccion(entregadas)
 
-            # Extraer variables reales de la orden actual
             num_repuestos = orden.repuestos_usados.count()
             tecnico_id = orden.tecnico.id if orden.tecnico else 0
             descripcion = orden.descripcion_problema or ''
 
-            # Predecir días con la IA
             dias_predichos = predecir_dias_orden(num_repuestos, tecnico_id, descripcion)
 
-            # CAMBIO CLAVE: Sumar los días predichos a partir de la fecha y hora ACTUAL (momento del cálculo)
             orden.fecha_estimada = timezone.now() + timedelta(days=dias_predichos)
             orden.save()
 
@@ -573,6 +566,7 @@ class CalcularEstimacionIAView(APIView):
         except OrdenTrabajo.DoesNotExist:
             return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
 
+
 class EnviarCorreoEstimacionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -583,24 +577,72 @@ class EnviarCorreoEstimacionView(APIView):
             if not orden.fecha_estimada:
                 return Response({'error': 'No hay fecha estimada calculada.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            cliente_email = orden.vehiculo.cliente.email if orden.vehiculo and orden.vehiculo.cliente else None
+            cliente_email = None
+            cliente_nombre = "Cliente"
+            if hasattr(orden, 'vehiculo') and orden.vehiculo and orden.vehiculo.cliente:
+                cliente_email = orden.vehiculo.cliente.email
+                cliente_nombre = orden.vehiculo.cliente.nombre
             
             if not cliente_email:
                 return Response({'error': 'El cliente no tiene un correo registrado.'}, status=status.HTTP_400_BAD_REQUEST)
 
             fecha_formateada = orden.fecha_estimada.strftime('%d-%m-%Y')
-            asunto = f'Estimación de Entrega - OT-{orden.id:03d} | SIGMA'
-            mensaje = (
-                f'Hola {orden.vehiculo.cliente.nombre},\n\n'
-                f'Le informamos que el diagnóstico de su vehículo ({orden.vehiculo.modelo} - Patente: {orden.vehiculo.patente}) '
-                f'ha finalizado y se han asignado los repuestos necesarios.\n\n'
-                f'La fecha estimada de entrega es el: {fecha_formateada}.\n\n'
-                f'Atentamente,\nEquipo de Taller SIGMA'
-            )
+            nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
+            vehiculo_info = f"{orden.vehiculo.modelo} - Patente: {orden.vehiculo.patente}" if orden.vehiculo else "Vehículo"
 
-            send_mail(asunto, mensaje, settings.DEFAULT_FROM_EMAIL, [cliente_email], fail_silently=False)
+            url = "https://api.brevo.com/v3/smtp/email"
+            headers = {
+                "accept": "application/json",
+                "api-key": os.environ.get("BREVO_API_KEY"),
+                "content-type": "application/json"
+            }
 
-            return Response({'success': True, 'mensaje': 'Correo enviado exitosamente.'}, status=status.HTTP_200_OK)
+            payload = {
+                "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
+                "to": [{"email": cliente_email}],
+                "subject": f"Estimación de Entrega - OT-{orden.id:03d} | {nombre_taller}",
+                "htmlContent": f"""
+                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
+                    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                        
+                        <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
+                            <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                            <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
+                        </div>
+                        
+                        <div style="padding: 40px 30px;">
+                            <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
+                            <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
+                                Le informamos que el diagnóstico de su vehículo (<strong>{vehiculo_info}</strong>) ha finalizado y se han asignado los repuestos necesarios.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
+                                <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Fecha Estimada de Entrega</p>
+                                <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900;">
+                                    {fecha_formateada}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                            <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                                Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
+                            </p>
+                        </div>
+                        
+                    </div>
+                </div>
+                """
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
+            
+            if response.status_code in [200, 201, 202]:
+                return Response({'success': True, 'mensaje': 'Correo enviado exitosamente vía Brevo.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': f'Error de Brevo: {response.text}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except OrdenTrabajo.DoesNotExist:
             return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': f'Error interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
