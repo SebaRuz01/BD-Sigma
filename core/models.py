@@ -158,15 +158,12 @@ class OrdenTrabajo(models.Model):
     fecha_entrega = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
-        # Generar código de seguimiento único si no existe
         if not self.codigo_seguimiento:
             self.codigo_seguimiento = uuid.uuid4().hex[:8].upper()
 
-        # Automatización: Si el estado cambia a 'entregado' y no tiene fecha de entrega, se asigna el momento exacto
         if self.estado == 'entregado' and not self.fecha_entrega:
             self.fecha_entrega = timezone.now()
 
-        # Automatización: Si es una orden nueva y no tiene fecha estimada, se le asigna una por defecto (ej. 3 días)
         if not self.pk and not self.fecha_estimada:
             self.fecha_estimada = timezone.now() + timedelta(days=3)
 
