@@ -451,37 +451,63 @@ class PasswordResetRequestView(APIView):
         except Usuario.DoesNotExist:
             return Response({'mensaje': 'Correo enviado si la cuenta existe.'}, status=status.HTTP_200_OK)
 
-
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        
-
         token = default_token_generator.make_token(user)
-
 
         frontend_url = f"https://misigma.infinityfree.me/reset-password/{uid}/{token}/"
 
-
-        asunto = 'Recuperación de contraseña - SIGMA'
-        mensaje = f"""
-Hola {user.first_name or user.username},
-
-Recibimos una solicitud para restablecer tu contraseña en SIGMA.
-Haz clic en el siguiente enlace para crear una nueva contraseña:
-
-{frontend_url}
-
-Si no solicitaste este cambio, puedes ignorar este correo.
-"""
         try:
-            send_mail(
-                asunto,
-                mensaje,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+            url = "https://api.brevo.com/v3/smtp/email"
+            headers = {
+                "accept": "application/json",
+                "api-key": os.environ.get("BREVO_API_KEY"),
+                "content-type": "application/json"
+            }
+            
+            payload = {
+                "sender": {"name": "Soporte SIGMA", "email": "sebaruz2004@gmail.com"},
+                "to": [{"email": user.email}],
+                "subject": "Recuperación de contraseña - SIGMA",
+                "htmlContent": f"""
+                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
+                    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                        
+                        <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
+                            <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                            <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Soporte Técnico</p>
+                        </div>
+                        
+                        <div style="padding: 40px 30px;">
+                            <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {user.first_name or user.username},</h2>
+                            <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
+                                Recibimos una solicitud para restablecer tu contraseña en SIGMA.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 35px 0;">
+                                <a href="{frontend_url}" style="background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 14px 30px; border-radius: 8px; display: inline-block;">Crear Nueva Contraseña</a>
+                            </div>
+                            
+                            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+                            
+                            <p style="font-size: 14px; color: #64748b; margin-bottom: 0;">
+                                Si no solicitaste este cambio, puedes ignorar este correo de forma segura. El enlace expirará pronto.
+                            </p>
+                        </div>
+                        
+                    </div>
+                </div>
+                """
+            }
+            
+            response = requests.post(url, json=payload, headers=headers)
+            
+            if response.status_code not in [200, 201, 202]:
+                print(f"Error Brevo al enviar recuperación: {response.text}")
+                return Response({'error': 'Hubo un problema con el proveedor de correos.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
         except Exception as e:
-            return Response({'error': 'Hubo un problema al enviar el correo.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Excepción al conectar con Brevo (recuperación): {e}")
+            return Response({'error': 'Error interno del servidor al enviar el correo.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'mensaje': 'Correo enviado exitosamente.'}, status=status.HTTP_200_OK)
 
