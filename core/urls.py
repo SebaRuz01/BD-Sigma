@@ -1,11 +1,12 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+
 from .views import (
     TallerViewSet, UsuarioViewSet,
     ModuloViewSet, ModuloContratadoViewSet,
     TecnicoViewSet, RepuestoViewSet,
     OrdenTrabajoViewSet, OrdenRepuestoViewSet,
-    ComunaViewSet, ClienteViewSet, VehiculoViewSet,
+    ComunaViewSet, ClienteViewSet,PasswordResetRequestView, PasswordResetConfirmView, VehiculoViewSet,
     OrdenPublicaView, CitaViewSet
 )
 
@@ -23,6 +24,10 @@ router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'vehiculos', VehiculoViewSet, basename='vehiculo')
 router.register(r'citas', CitaViewSet, basename='cita')
 
+
+
 urlpatterns = router.urls + [
     path('publico/ordenes/<str:codigo>/', OrdenPublicaView.as_view()),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
+    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
 ]
