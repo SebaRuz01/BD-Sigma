@@ -7,6 +7,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
 
 from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from .models import (
@@ -29,15 +34,11 @@ from .serializers import (
 class TallerViewSet(viewsets.ModelViewSet):
     queryset = Taller.objects.all()
 
-    # Usamos permisos dinámicos en lugar de uno fijo para toda la clase
     def get_permissions(self):
-        # Si la acción es 'list' (ver todos) o 'retrieve' (ver un taller específico)
         if self.action in ['list', 'retrieve']:
-            permission_classes = [IsAuthenticated] # Cualquier cliente o técnico logueado puede verlos
+            permission_classes = [IsAuthenticated]
         else:
-            # Para crear, editar o borrar talleres, seguimos exigiendo ser SuperAdmin
             permission_classes = [IsAuthenticated, EsSuperAdmin]
-        
         return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
@@ -124,7 +125,6 @@ class RepuestoViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         taller_id = request.user.taller_id
         
-        # Obtenemos y limpiamos los campos de texto
         nombre = request.data.get('nombre', '').strip()
         compatibilidades = request.data.get('compatibilidades', '').strip()
         modelo = request.data.get('modelo', '').strip()
@@ -134,35 +134,28 @@ class RepuestoViewSet(viewsets.ModelViewSet):
         except (ValueError, TypeError):
             stock_a_sumar = 0
 
-        # 1. Regla base: SIEMPRE debe ser del mismo taller y tener el mismo nombre exacto
         query = Q(taller_id=taller_id, nombre__iexact=nombre)
 
-        # 2. Regla flexible: Que coincida el modelo "O" la compatibilidad
         condiciones_or = Q()
         if modelo:
             condiciones_or |= Q(modelo__iexact=modelo)
         if compatibilidades:
             condiciones_or |= Q(compatibilidades__iexact=compatibilidades)
 
-        # Si el usuario escribió algo en modelo o compatibilidad, aplicamos el "OR"
         if condiciones_or:
             query &= condiciones_or
         else:
-            # Si dejó ambos en blanco, buscamos uno que también los tenga en blanco
             query &= Q(modelo__iexact='', compatibilidades__iexact='')
 
-        # Ejecutamos la búsqueda con estas nuevas reglas
         repuesto_existente = Repuesto.objects.filter(query).first()
 
         if repuesto_existente:
-            # ¡Coincidió! Ya sea por el modelo o por la compatibilidad. Sumamos el stock.
             repuesto_existente.stock_actual += stock_a_sumar
             repuesto_existente.save()
             
             serializer = self.get_serializer(repuesto_existente)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        # Si no coincidió ni por modelo ni por compatibilidad, es un repuesto nuevo
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
@@ -199,7 +192,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 cliente_nombre = orden.vehiculo.cliente.nombre
                 
-                # Se limpia la variable para mostrar únicamente la patente
                 vehiculo_info = orden.vehiculo.patente if orden.vehiculo else "No registrada"
                 
                 if orden.tecnico and orden.tecnico.usuario:
@@ -286,7 +278,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
                     cliente_nombre = orden_actualizada.vehiculo.cliente.nombre
                     
-                    # Diccionario para formatear los estados de la base de datos
                     diccionario_estados = {
                         'recibido': 'Recibido',
                         'diagnostico': 'Diagnóstico',
@@ -294,7 +285,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         'listo_para_retiro': 'Listo para Retiro',
                         'entregado': 'Entregado'
                     }
-                    # Si el estado no está en el diccionario, quita los guiones bajos y pone mayúsculas
                     estado_formateado = diccionario_estados.get(
                         orden_actualizada.estado.lower(), 
                         orden_actualizada.estado.replace('_', ' ').title()
@@ -444,3 +434,78 @@ class CitaViewSet(viewsets.ModelViewSet):
         if u.rol == 'cliente' and serializer.validated_data.get('estado', 'cancelada') != 'cancelada':
             raise ValidationError('Solo puedes cancelar tus citas.')
         serializer.save()
+
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [] 
+
+    def post(self, request):
+        email = request.data.get('email')
+        
+        if not email:
+            return Response({'error': 'El correo es obligatorio.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = Usuario.objects.get(email=email)
+        except Usuario.DoesNotExist:
+            return Response({'mensaje': 'Correo enviado si la cuenta existe.'}, status=status.HTTP_200_OK)
+
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+
+        token = default_token_generator.make_token(user)
+
+
+        frontend_url = f"https://misigma.infinityfree.me/reset-password/{uid}/{token}/"
+
+
+        asunto = 'Recuperación de contraseña - SIGMA'
+        mensaje = f"""
+Hola {user.first_name or user.username},
+
+Recibimos una solicitud para restablecer tu contraseña en SIGMA.
+Haz clic en el siguiente enlace para crear una nueva contraseña:
+
+{frontend_url}
+
+Si no solicitaste este cambio, puedes ignorar este correo.
+"""
+        try:
+            send_mail(
+                asunto,
+                mensaje,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            return Response({'error': 'Hubo un problema al enviar el correo.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'mensaje': 'Correo enviado exitosamente.'}, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [] 
+
+    def post(self, request):
+        uidb64 = request.data.get('uid')
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+
+        if not uidb64 or not token or not new_password:
+            return Response({'error': 'Faltan datos requeridos.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = Usuario.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, Usuario.DoesNotExist):
+            return Response({'error': 'Enlace inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if default_token_generator.check_token(user, token):
+            user.set_password(new_password)
+            user.save()
+            return Response({'mensaje': 'Contraseña actualizada correctamente.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'El enlace ha expirado o es inválido.'}, status=status.HTTP_400_BAD_REQUEST)
