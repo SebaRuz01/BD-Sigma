@@ -7,7 +7,8 @@ from .views import (
     TecnicoViewSet, RepuestoViewSet,
     OrdenTrabajoViewSet, OrdenRepuestoViewSet,
     ComunaViewSet, ClienteViewSet,PasswordResetRequestView, PasswordResetConfirmView, VehiculoViewSet,
-    OrdenPublicaView, CitaViewSet
+    OrdenPublicaView, CitaViewSet, CalcularEstimacionIAView,
+    EnviarCorreoEstimacionView,
 )
 
 router = DefaultRouter()
@@ -23,6 +24,7 @@ router.register(r'comunas', ComunaViewSet)
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'vehiculos', VehiculoViewSet, basename='vehiculo')
 router.register(r'citas', CitaViewSet, basename='cita')
+
 
 
 
