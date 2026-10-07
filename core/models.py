@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-from datetime import timedelta
 import uuid
 
 
@@ -163,9 +162,12 @@ class OrdenTrabajo(models.Model):
 
         if self.estado == 'entregado' and not self.fecha_entrega:
             self.fecha_entrega = timezone.now()
-
-        if not self.pk and not self.fecha_estimada:
-            self.fecha_estimada = timezone.now() + timedelta(days=3)
+            try:
+                from .ml_modelo import entrenar_modelo_prediccion
+                entregadas = OrdenTrabajo.objects.filter(taller=self.taller, estado='entregado')
+                entrenar_modelo_prediccion(entregadas)
+            except Exception:
+                pass
 
         super().save(*args, **kwargs)
 
