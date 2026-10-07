@@ -30,4 +30,6 @@ urlpatterns = router.urls + [
     path('publico/ordenes/<str:codigo>/', OrdenPublicaView.as_view()),
     path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('ordenes/<int:pk>/estimar-ia/', CalcularEstimacionIAView.as_view()),
+    path('ordenes/<int:pk>/enviar-correo/', EnviarCorreoEstimacionView.as_view()),
 ]
