@@ -14,7 +14,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from .ml_modelo import predecir_dias_orden, entrenar_modelo_prediccion
+from ml_modelo import predecir_dias_orden, entrenar_modelo_prediccion
 from .permissions import TieneModuloActivo, EsSuperAdmin, EsAdminTaller
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
