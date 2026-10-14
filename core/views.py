@@ -164,14 +164,33 @@ class RepuestoViewSet(viewsets.ModelViewSet):
 
 
 class OrdenTrabajoViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
     modulo_requerido = 'ordenes'
+
+    def get_permissions(self):
+        # Si es cliente o solo está listando/consultando una orden, no exigir EsAdminTaller
+        usuario = self.request.user
+        if getattr(usuario, 'rol', None) == 'cliente' or self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated, TieneModuloActivo]
+        else:
+            permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         usuario = self.request.user
+
+        # Clientes: solo devuelven sus propias órdenes asociadas
+        if getattr(usuario, 'rol', None) == 'cliente':
+            return OrdenTrabajo.objects.filter(
+                Q(vehiculo__cliente__rut=f"APP-{usuario.id}") |
+                Q(vehiculo__cliente__email=usuario.email)
+            ).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
+
+        # Super-admin sin taller: ve todas las órdenes
         if usuario.taller_id is None:
-            return OrdenTrabajo.objects.all()
-        return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id)
+            return OrdenTrabajo.objects.all().select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
+
+        # Empleados y dueños de taller: ven las órdenes de su taller
+        return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -417,6 +436,7 @@ class OrdenPublicaView(APIView):
             'tecnico_nombre': tecnico_nombre,
         })
 
+
 class CitaViewSet(viewsets.ModelViewSet):
     serializer_class = CitaSerializer
     permission_classes = [IsAuthenticated]
@@ -435,7 +455,6 @@ class CitaViewSet(viewsets.ModelViewSet):
         if u.rol == 'cliente' and serializer.validated_data.get('estado', 'cancelada') != 'cancelada':
             raise ValidationError('Solo puedes cancelar tus citas.')
         serializer.save()
-
 
 
 class PasswordResetRequestView(APIView):

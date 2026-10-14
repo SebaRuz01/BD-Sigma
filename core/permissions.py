@@ -24,6 +24,10 @@ class TieneModuloActivo(BasePermission):
         if not usuario.is_authenticated:
             return False
 
+        # El cliente no tiene taller asignado
+        if getattr(usuario, 'rol', None) == 'cliente':
+            return True
+
         # El super-admin (sin taller asignado) siempre pasa.
         if usuario.taller_id is None and usuario.rol == 'super_admin':
             return True
@@ -45,6 +49,7 @@ class EsSuperAdmin(BasePermission):
         usuario = request.user
         return usuario.is_authenticated and usuario.rol == 'super_admin'
 
+
 class TieneModuloActivo(BasePermission):
     message = "Tu taller no tiene contratado este módulo."
 
@@ -56,6 +61,10 @@ class TieneModuloActivo(BasePermission):
         usuario = request.user
         if not usuario.is_authenticated:
             return False
+
+        # El cliente no tiene taller asignado
+        if getattr(usuario, 'rol', None) == 'cliente':
+            return True
 
         if usuario.taller_id is None and usuario.rol == 'super_admin':
             return True
@@ -72,6 +81,7 @@ class TieneModuloActivo(BasePermission):
             modulo__slug=modulo_slug,
             activo=True
         ).exists()
+
 
 class EsAdminTaller(BasePermission):
     message = "Solo el administrador del taller puede realizar esta acción."
