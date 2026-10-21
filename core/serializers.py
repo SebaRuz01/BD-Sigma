@@ -271,9 +271,14 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
 
     def get_equipo(self, obj):
         if not obj.vehiculo_id:
-            return None
-        partes = [obj.vehiculo.modelo, obj.vehiculo.patente]
-        return ' — '.join([p for p in partes if p])
+            return "Sin vehículo"
+    
+        modelo = obj.vehiculo.modelo
+        patente = obj.vehiculo.patente
+        
+        if modelo:
+            return modelo
+        return patente or "Vehículo sin identificar"
 
 
 class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
