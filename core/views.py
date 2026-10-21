@@ -159,7 +159,7 @@ class RepuestoViewSet(viewsets.ModelViewSet):
         
         return super().create(request, *args, **kwargs)
 
-    def perform_create(self, serializer):
+    def _create(self, serializer):
         serializer.save(taller_id=self.request.user.taller_id)
 
 
@@ -289,9 +289,19 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
         orden_actualizada = serializer.save()
         
-        # 1. NOTIFICAR AL TÉCNICO SI SE LE ASIGNÓ UNA ORDEN NUEVA
-        if tecnico_anterior != orden_actualizada.tecnico and orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
-            tec_email = orden_actualizada.tecnico.usuario.email
+        # 1. ENVIAR CORREO AL TÉCNICO CUANDO SE LE ASIGNA O CAMBIA POR PRIMERA VEZ
+        if tecnico_anterior != orden_actualizada.tecnico and orden_actualizada.tecnico:
+            # Intentamos obtener el correo del usuario asociado al técnico
+            tec_email = None
+            tec_nombre = "Técnico"
+            
+            if hasattr(orden_actualizada.tecnico, 'usuario') and orden_actualizada.tecnico.usuario:
+                tec_email = orden_actualizada.tecnico.usuario.email
+                tec_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
+            elif hasattr(orden_actualizada.tecnico, 'email'):
+                tec_email = orden_actualizada.tecnico.email
+                tec_nombre = getattr(orden_actualizada.tecnico, 'nombre', 'Técnico')
+
             if tec_email:
                 try:
                     url = "https://api.brevo.com/v3/smtp/email"
@@ -301,7 +311,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "content-type": "application/json"
                     }
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
-                    tec_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
                     vehiculo_info = f"{orden_actualizada.vehiculo.modelo} - Patente: {orden_actualizada.vehiculo.patente}" if orden_actualizada.vehiculo else "Vehículo"
                     cliente_nombre = orden_actualizada.vehiculo.cliente.nombre if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else "Cliente"
 
@@ -335,11 +344,15 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         </div>
                         """
                     }
-                    requests.post(url, json=payload, headers=headers)
+                    resp_tec = requests.post(url, json=payload, headers=headers)
+                    if resp_tec.status_code in [200, 201, 202]:
+                        print(f"Correo de asignación enviado exitosamente al técnico {tec_email}")
+                    else:
+                        print(f"Error Brevo al notificar al técnico: {resp_tec.text}")
                 except Exception as e:
-                    print(f"Excepción al notificar al técnico por correo: {e}")
+                    print(f"Excepción al conectar con Brevo para el técnico: {e}")
 
-        # 2. NOTIFICAR AL CLIENTE SI CAMBIÓ EL ESTADO DE LA ORDEN
+        # 2. ENVIAR CORREO AL CLIENTE SI CAMBIó EL ESTADO DE LA ORDEN
         if estado_anterior != orden_actualizada.estado:
             cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
             if cliente_email:
@@ -365,10 +378,10 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         orden_actualizada.estado.replace('_', ' ').title()
                     )
                     
-                    if orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
+                    if orden_actualizada.tecnico and hasattr(orden_actualizada.tecnico, 'usuario') and orden_actualizada.tecnico.usuario:
                         t_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
                         t_email = orden_actualizada.tecnico.usuario.email or "No registrado"
-                        t_telefono = orden_actualizada.tecnico.usuario.telefono or "No registrado"
+                        t_telefono = getattr(orden_actualizada.tecnico.usuario, 'telefono', 'No registrado')
                         tecnico_html = f"""
                             <p style="margin: 0 0 5px 0; font-size: 15px; color: #334155;"><strong>Técnico asignado:</strong> {t_nombre}</p>
                             <p style="margin: 0 0 5px 0; font-size: 14px; color: #475569;"><strong>Correo:</strong> {t_email}</p>
@@ -414,7 +427,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     }
                     requests.post(url, json=payload, headers=headers)
                 except Exception as e:
-                    print(f"Excepción al conectar con Brevo en actualización: {e}")
+                    print(f"Excepción al conectar con Brevo en actualización de estado: {e}")
 
 
 class OrdenRepuestoViewSet(viewsets.ModelViewSet):
