@@ -87,8 +87,10 @@ class EsAdminTaller(BasePermission):
     message = "Solo el administrador del taller puede realizar esta acción."
 
     def has_permission(self, request, view):
-        # Para lectura y creación, cualquier usuario autenticado del taller pasa.
-        if request.method not in ('DELETE',):
-            return True
         usuario = request.user
-        return usuario.is_authenticated and usuario.rol in ('admin_taller', 'super_admin')
+
+        return bool(
+            usuario and 
+            usuario.is_authenticated and 
+            usuario.rol == 'admin_taller'
+        )
