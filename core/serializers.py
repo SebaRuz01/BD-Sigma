@@ -274,6 +274,17 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
+    # Campos del cliente enviados desde el formulario de React
+    cliente_nombre = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_rut = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    cliente_telefono = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_calle = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_numero = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_region = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    cliente_comuna = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # Campos del vehículo enviados desde el formulario de React
     marca = serializers.CharField(write_only=True, required=False, allow_blank=True)
     modelo = serializers.CharField(write_only=True, required=False, allow_blank=True)
     vehiculo_patente = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -290,33 +301,75 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get('request')
         
+        # 1. Asignar taller automáticamente
+        taller = None
         if request and hasattr(request, 'user') and request.user.taller:
-            validated_data['taller'] = request.user.taller
+            taller = request.user.taller
+            validated_data['taller'] = taller
 
+        # 2. Extraer datos del cliente
+        c_nombre = validated_data.pop('cliente_nombre', '')
+        c_rut = validated_data.pop('cliente_rut', '')
+        c_email = validated_data.pop('cliente_email', '')
+        c_telefono = validated_data.pop('cliente_telefono', '')
+        c_calle = validated_data.pop('cliente_calle', '')
+        c_numero = validated_data.pop('cliente_numero', '')
+        c_region = validated_data.pop('cliente_region', '')
+        c_comuna = validated_data.pop('cliente_comuna', '')
+
+        # 3. Extraer datos del vehículo
         marca = validated_data.pop('marca', '')
         modelo_seleccionado = validated_data.pop('modelo', '')
         patente = validated_data.pop('vehiculo_patente', '')
         anio = validated_data.pop('vehiculo_anio', None)
 
+        # 4. Gestionar Comuna del cliente
+        comuna_obj = None
+        if c_comuna:
+            comuna_obj, _ = Comuna.objects.get_or_create(
+                nombre=c_comuna.strip(),
+                defaults={'region': (c_region or 'Sin especificar').strip()}
+            )
+
+        # 5. Crear o actualizar el Cliente
+        cliente_obj = None
+        if c_rut and taller:
+            cliente_obj, _ = Cliente.objects.update_or_create(
+                taller=taller,
+                rut=c_rut.strip().upper(),
+                defaults={
+                    'nombre': c_nombre.strip(),
+                    'email': c_email.strip(),
+                    'telefono': c_telefono.strip(),
+                    'calle': c_calle.strip(),
+                    'numero': c_numero.strip(),
+                    'comuna': comuna_obj,
+                }
+            )
+
+        # 6. Unir marca y modelo en formato "MARCA - MODELO"
         if marca and modelo_seleccionado:
             modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
             modelo_final = modelo_seleccionado or marca
 
+        # 7. Crear o actualizar el Vehículo vinculado al cliente
         if patente:
             vehiculo_obj, _ = Vehiculo.objects.update_or_create(
                 patente=patente.upper().strip(),
                 defaults={
                     'modelo': modelo_final if modelo_final else None,
                     'anio': anio if anio else None,
+                    'cliente': cliente_obj,
                 }
             )
             validated_data['vehiculo'] = vehiculo_obj
 
-        validated_data.pop('marca', None)
-        validated_data.pop('modelo', None)
-        validated_data.pop('vehiculo_patente', None)
-        validated_data.pop('vehiculo_anio', None)
+        # Limpiar campos temporales por seguridad
+        for campo in ['cliente_nombre', 'cliente_rut', 'cliente_email', 'cliente_telefono', 
+                      'cliente_calle', 'cliente_numero', 'cliente_region', 'cliente_comuna',
+                      'marca', 'modelo', 'vehiculo_patente', 'vehiculo_anio']:
+            validated_data.pop(campo, None)
 
         return super().create(validated_data)
 
