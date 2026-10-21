@@ -283,7 +283,6 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
-    # Campos que vienen desde el formulario de React
     marca = serializers.CharField(write_only=True, required=False, allow_blank=True)
     modelo = serializers.CharField(write_only=True, required=False, allow_blank=True)
     vehiculo_patente = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -291,39 +290,39 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrdenTrabajo
-        fields = '__all__' # O la lista de campos que utilices
+        fields = '__all__'
 
     def create(self, validated_data):
-        # 1. Extraemos los datos del vehículo enviados por React
         marca = validated_data.pop('marca', '')
         modelo_seleccionado = validated_data.pop('modelo', '')
         patente = validated_data.pop('vehiculo_patente', '')
         anio = validated_data.pop('vehiculo_anio', None)
 
-        # 2. Unimos marca y modelo en el formato "MARCA - MODELO"
+        # Unimos marca y modelo en formato "MARCA - MODELO"
         if marca and modelo_seleccionado:
             modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
             modelo_final = modelo_seleccionado or marca
 
-        # 3. Creamos o buscamos el vehículo asociado al cliente en el taller
-        taller = validated_data.get('taller')
-        # (Asegúrate de asociarlo al cliente que corresponda en tu lógica actual de creación)
-        
-        # Aquí actualizamos o creamos el registro del vehículo en tu base de datos:
-        vehiculo_obj, creado = Vehiculo.objects.update_or_create(
-            patente=patente.upper().strip() if patente else '',
-            defaults={
-                'modelo': modelo_final if modelo_final else None,
-                'anio': anio if anio else None,
-            }
-        )
+        # Creamos o actualizamos el vehículo asociado
+        vehiculo_obj = None
+        if patente:
+            vehiculo_obj, _ = Vehiculo.objects.update_or_create(
+                patente=patente.upper().strip(),
+                defaults={
+                    'modelo': modelo_final if modelo_final else None,
+                    'anio': anio if anio else None,
+                }
+            )
+            validated_data['vehiculo'] = vehiculo_obj
 
-        # 4. Asignamos el vehículo a la orden de trabajo y guardamos
-        validated_data['vehiculo'] = vehiculo_obj
-        orden = super().create(validated_data)
-        return orden
+        # Eliminamos por si acaso campos sueltos que no pertenezcan directamente a la tabla OrdenTrabajo
+        validated_data.pop('marca', None)
+        validated_data.pop('modelo', None)
+        validated_data.pop('vehiculo_patente', None)
+        validated_data.pop('vehiculo_anio', None)
 
+        return super().create(validated_data)
 
 class CitaSerializer(serializers.ModelSerializer):
     taller_id = serializers.PrimaryKeyRelatedField(source='taller', queryset=Taller.objects.all())
