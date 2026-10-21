@@ -213,7 +213,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajoSerializer
 
     def perform_create(self, serializer):
-        # Corrección aplicada: se pasa taller_id directamente para evitar el error 500
         orden = serializer.save(taller_id=self.request.user.taller_id)
         
         cliente_email = orden.vehiculo.cliente.email if (orden.vehiculo and orden.vehiculo.cliente) else None
@@ -227,7 +226,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 }
                 nombre_taller = orden.taller.nombre_comercial if orden.taller else "nuestro taller"
                 cliente_nombre = orden.vehiculo.cliente.nombre
-                
                 vehiculo_info = orden.vehiculo.patente if orden.vehiculo else "No registrada"
                 
                 if orden.tecnico and orden.tecnico.usuario:
@@ -287,9 +285,61 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         orden_antigua = self.get_object()
         estado_anterior = orden_antigua.estado
+        tecnico_anterior = orden_antigua.tecnico
 
         orden_actualizada = serializer.save()
         
+        # 1. NOTIFICAR AL TÉCNICO SI SE LE ASIGNÓ UNA ORDEN NUEVA
+        if tecnico_anterior != orden_actualizada.tecnico and orden_actualizada.tecnico and orden_actualizada.tecnico.usuario:
+            tec_email = orden_actualizada.tecnico.usuario.email
+            if tec_email:
+                try:
+                    url = "https://api.brevo.com/v3/smtp/email"
+                    headers = {
+                        "accept": "application/json",
+                        "api-key": os.environ.get("BREVO_API_KEY"),
+                        "content-type": "application/json"
+                    }
+                    nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
+                    tec_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
+                    vehiculo_info = f"{orden_actualizada.vehiculo.modelo} - Patente: {orden_actualizada.vehiculo.patente}" if orden_actualizada.vehiculo else "Vehículo"
+                    cliente_nombre = orden_actualizada.vehiculo.cliente.nombre if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else "Cliente"
+
+                    payload = {
+                        "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
+                        "to": [{"email": tec_email}],
+                        "subject": f"Nueva Orden Asignada: OT-{orden_actualizada.id:03d} | {nombre_taller}",
+                        "htmlContent": f"""
+                        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
+                            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                                <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
+                                    <h1 style="color: #ffffff; margin: 0; font-size: 20px;">SIGMA - Asignación de Taller</h1>
+                                </div>
+                                <div style="padding: 40px 30px;">
+                                    <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {tec_nombre},</h2>
+                                    <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
+                                        Se te ha asignado una nueva orden de trabajo en <strong>{nombre_taller}</strong>.
+                                    </p>
+                                    <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold;">Detalles del Trabajo</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Orden:</strong> OT-{orden_actualizada.id:03d}</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Vehículo:</strong> {vehiculo_info}</p>
+                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Cliente:</strong> {cliente_nombre}</p>
+                                        <p style="margin: 0; font-size: 15px; color: #334155;"><strong>Problema reportado:</strong> {orden_actualizada.descripcion_problema or 'Sin descripción'}</p>
+                                    </div>
+                                </div>
+                                <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                                    <p style="margin: 0; font-size: 12px; color: #94a3b8;">Sistema de gestión SIGMA</p>
+                                </div>
+                            </div>
+                        </div>
+                        """
+                    }
+                    requests.post(url, json=payload, headers=headers)
+                except Exception as e:
+                    print(f"Excepción al notificar al técnico por correo: {e}")
+
+        # 2. NOTIFICAR AL CLIENTE SI CAMBIÓ EL ESTADO DE LA ORDEN
         if estado_anterior != orden_actualizada.estado:
             cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
             if cliente_email:
@@ -352,17 +402,10 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                     <div style="background-color: #f8fafc; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
                                         {tecnico_html}
                                     </div>
-                                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
-                                    <div style="text-align: center;">
-                                        <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Tu código único de seguimiento en tiempo real:</p>
-                                        <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
-                                            {orden_actualizada.codigo_seguimiento}
-                                        </div>
-                                    </div>
                                 </div>
                                 <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
                                     <p style="margin: 0; font-size: 12px; color: #94a3b8;">
-                                        Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
+                                        Este es un correo automático generado por el sistema SIGMA.
                                     </p>
                                 </div>
                             </div>
@@ -483,29 +526,23 @@ class PasswordResetRequestView(APIView):
                 "htmlContent": f"""
                 <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
                     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                        
                         <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
                             <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                             <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Soporte Técnico</p>
                         </div>
-                        
                         <div style="padding: 40px 30px;">
                             <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {user.first_name or user.username},</h2>
                             <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
                                 Recibimos una solicitud para restablecer tu contraseña en SIGMA.
                             </p>
-                            
                             <div style="text-align: center; margin: 35px 0;">
                                 <a href="{frontend_url}" style="background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 14px 30px; border-radius: 8px; display: inline-block;">Crear Nueva Contraseña</a>
                             </div>
-                            
                             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
-                            
                             <p style="font-size: 14px; color: #64748b; margin-bottom: 0;">
                                 Si no solicitaste este cambio, puedes ignorar este correo de forma segura. El enlace expirará pronto.
                             </p>
                         </div>
-                        
                     </div>
                 </div>
                 """
@@ -616,18 +653,15 @@ class EnviarCorreoEstimacionView(APIView):
                 "htmlContent": f"""
                 <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
                     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                        
                         <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
                             <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                             <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                         </div>
-                        
                         <div style="padding: 40px 30px;">
                             <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
                             <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
                                 Le informamos que el diagnóstico de su vehículo (<strong>{vehiculo_info}</strong>) ha finalizado y se han asignado los repuestos necesarios.
                             </p>
-                            
                             <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
                                 <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Fecha Estimada de Entrega</p>
                                 <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900;">
@@ -635,13 +669,11 @@ class EnviarCorreoEstimacionView(APIView):
                                 </p>
                             </div>
                         </div>
-                        
                         <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
                             <p style="margin: 0; font-size: 12px; color: #94a3b8;">
                                 Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
                             </p>
                         </div>
-                        
                     </div>
                 </div>
                 """
