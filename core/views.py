@@ -213,7 +213,8 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajoSerializer
 
     def perform_create(self, serializer):
-        orden = serializer.save(taller=self.request.user.taller)
+        # Corrección aplicada: se pasa taller_id directamente para evitar el error 500
+        orden = serializer.save(taller_id=self.request.user.taller_id)
         
         cliente_email = orden.vehiculo.cliente.email if (orden.vehiculo and orden.vehiculo.cliente) else None
         if cliente_email:
