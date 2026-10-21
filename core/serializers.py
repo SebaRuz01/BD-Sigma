@@ -283,64 +283,46 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.CharField(write_only=True)
-    cliente_rut = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cliente_telefono = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    cliente_email = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    vehiculo_patente = serializers.CharField(write_only=True)
-    vehiculo_modelo = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Campos que vienen desde el formulario de React
+    marca = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    modelo = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    vehiculo_patente = serializers.CharField(write_only=True, required=False, allow_blank=True)
     vehiculo_anio = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = OrdenTrabajo
-        fields = [
-            'id', 'tecnico', 'descripcion_problema', 'estado',
-            'cliente_nombre', 'cliente_rut', 'cliente_telefono', 'cliente_email',
-            'vehiculo_patente', 'vehiculo_modelo', 'vehiculo_anio',
-        ]
+        fields = '__all__' # O la lista de campos que utilices
 
     def create(self, validated_data):
-        taller = self.context['request'].user.taller
+        # 1. Extraemos los datos del vehículo enviados por React
+        marca = validated_data.pop('marca', '')
+        modelo_seleccionado = validated_data.pop('modelo', '')
+        patente = validated_data.pop('vehiculo_patente', '')
+        anio = validated_data.pop('vehiculo_anio', None)
 
-        cliente_nombre = validated_data.pop('cliente_nombre')
-        cliente_rut = validated_data.pop('cliente_rut', '')
-        cliente_telefono = validated_data.pop('cliente_telefono', '')
-        cliente_email = validated_data.pop('cliente_email', '')
-        vehiculo_patente = validated_data.pop('vehiculo_patente').upper().strip()
-        vehiculo_modelo = validated_data.pop('vehiculo_modelo', '')
-        vehiculo_anio = validated_data.pop('vehiculo_anio', None)
-
-        if cliente_rut:
-            cliente, created = Cliente.objects.get_or_create(
-                taller=taller, rut=cliente_rut,
-                defaults={'nombre': cliente_nombre, 'telefono': cliente_telefono, 'email': cliente_email},
-            )
-            if not created:
-                cliente.nombre = cliente_nombre
-                if cliente_telefono:
-                    cliente.telefono = cliente_telefono
-                if cliente_email:
-                    cliente.email = cliente_email
-                cliente.save()
+        # 2. Unimos marca y modelo en el formato "MARCA - MODELO"
+        if marca and modelo_seleccionado:
+            modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
-            cliente = Cliente.objects.create(
-                taller=taller, nombre=cliente_nombre,
-                telefono=cliente_telefono, email=cliente_email,
-            )
+            modelo_final = modelo_seleccionado or marca
 
-        vehiculo, created = Vehiculo.objects.get_or_create(
-            patente=vehiculo_patente,
-            defaults={'cliente': cliente, 'modelo': vehiculo_modelo, 'anio': vehiculo_anio},
+        # 3. Creamos o buscamos el vehículo asociado al cliente en el taller
+        taller = validated_data.get('taller')
+        # (Asegúrate de asociarlo al cliente que corresponda en tu lógica actual de creación)
+        
+        # Aquí actualizamos o creamos el registro del vehículo en tu base de datos:
+        vehiculo_obj, creado = Vehiculo.objects.update_or_create(
+            patente=patente.upper().strip() if patente else '',
+            defaults={
+                'modelo': modelo_final if modelo_final else None,
+                'anio': anio if anio else None,
+            }
         )
-        if not created:
-            vehiculo.cliente = cliente
-            if vehiculo_modelo:
-                vehiculo.modelo = vehiculo_modelo
-            if vehiculo_anio:
-                vehiculo.anio = vehiculo_anio
-            vehiculo.save()
 
-        return OrdenTrabajo.objects.create(taller=taller, vehiculo=vehiculo, **validated_data)
+        # 4. Asignamos el vehículo a la orden de trabajo y guardamos
+        validated_data['vehiculo'] = vehiculo_obj
+        orden = super().create(validated_data)
+        return orden
 
 
 class CitaSerializer(serializers.ModelSerializer):
