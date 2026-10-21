@@ -159,7 +159,7 @@ class RepuestoViewSet(viewsets.ModelViewSet):
         
         return super().create(request, *args, **kwargs)
 
-    def _create(self, serializer):
+    def perform_create(self, serializer):
         serializer.save(taller_id=self.request.user.taller_id)
 
 
@@ -285,24 +285,14 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         orden_antigua = self.get_object()
         estado_anterior = orden_antigua.estado
-        tecnico_anterior = orden_antigua.tecnico
+        tecnico_id_anterior = orden_antigua.tecnico_id
 
         orden_actualizada = serializer.save()
         
-        # 1. ENVIAR CORREO AL TÉCNICO CUANDO SE LE ASIGNA O CAMBIA POR PRIMERA VEZ
-        if tecnico_anterior != orden_actualizada.tecnico and orden_actualizada.tecnico:
-            # Intentamos obtener el correo del usuario asociado al técnico
-            tec_email = None
-            tec_nombre = "Técnico"
-            
-            if hasattr(orden_actualizada.tecnico, 'usuario') and orden_actualizada.tecnico.usuario:
-                tec_email = orden_actualizada.tecnico.usuario.email
-                tec_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
-            elif hasattr(orden_actualizada.tecnico, 'email'):
-                tec_email = orden_actualizada.tecnico.email
-                tec_nombre = getattr(orden_actualizada.tecnico, 'nombre', 'Técnico')
-
-            if tec_email:
+        # 1. NOTIFICAR AL CLIENTE SOLO CUANDO SE ASIGNA UN TÉCNICO A UNA ORDEN QUE NO TENÍA
+        if tecnico_id_anterior is None and orden_actualizada.tecnico is not None:
+            cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
+            if cliente_email:
                 try:
                     url = "https://api.brevo.com/v3/smtp/email"
                     headers = {
@@ -311,48 +301,65 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "content-type": "application/json"
                     }
                     nombre_taller = orden_actualizada.taller.nombre_comercial if orden_actualizada.taller else "nuestro taller"
+                    cliente_nombre = orden_actualizada.vehiculo.cliente.nombre
                     vehiculo_info = f"{orden_actualizada.vehiculo.modelo} - Patente: {orden_actualizada.vehiculo.patente}" if orden_actualizada.vehiculo else "Vehículo"
-                    cliente_nombre = orden_actualizada.vehiculo.cliente.nombre if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else "Cliente"
+                    
+                    tec_nombre = "Técnico especialista"
+                    if hasattr(orden_actualizada.tecnico, 'usuario') and orden_actualizada.tecnico.usuario:
+                        tec_nombre = f"{orden_actualizada.tecnico.usuario.first_name} {orden_actualizada.tecnico.usuario.last_name}".strip() or orden_actualizada.tecnico.usuario.username
+                    elif hasattr(orden_actualizada.tecnico, 'nombre'):
+                        tec_nombre = orden_actualizada.tecnico.nombre
 
                     payload = {
                         "sender": {"name": "SIGMA Taller", "email": "sebaruz2004@gmail.com"},
-                        "to": [{"email": tec_email}],
-                        "subject": f"Nueva Orden Asignada: OT-{orden_actualizada.id:03d} | {nombre_taller}",
+                        "to": [{"email": cliente_email}],
+                        "subject": f"¡Técnico asignado a tu vehículo! - OT-{orden_actualizada.id:03d} | {nombre_taller}",
                         "htmlContent": f"""
                         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
                             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
                                 <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
-                                    <h1 style="color: #ffffff; margin: 0; font-size: 20px;">SIGMA - Asignación de Taller</h1>
+                                    <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
+                                    <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                                 </div>
                                 <div style="padding: 40px 30px;">
-                                    <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {tec_nombre},</h2>
+                                    <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">¡Hola {cliente_nombre}!</h2>
                                     <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
-                                        Se te ha asignado una nueva orden de trabajo en <strong>{nombre_taller}</strong>.
+                                        Queremos contarte que ya se ha asignado al técnico especialista que estará a cargo de seguir de cerca el diagnóstico y cuidado de tu vehículo (<strong>{vehiculo_info}</strong>).
                                     </p>
-                                    <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-                                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold;">Detalles del Trabajo</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Orden:</strong> OT-{orden_actualizada.id:03d}</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Vehículo:</strong> {vehiculo_info}</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 15px; color: #334155;"><strong>Cliente:</strong> {cliente_nombre}</p>
-                                        <p style="margin: 0; font-size: 15px; color: #334155;"><strong>Problema reportado:</strong> {orden_actualizada.descripcion_problema or 'Sin descripción'}</p>
+                                    
+                                    <div style="text-align: center; margin: 30px 0; padding: 25px; background-color: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
+                                        <p style="margin: 0; font-size: 13px; color: #166534; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Especialista Asignado</p>
+                                        <p style="margin: 12px 0 0 0; font-size: 22px; color: #15803d; font-weight: 800;">
+                                            👨‍🔧 {tec_nombre}
+                                        </p>
+                                        <p style="margin: 10px 0 0 0; font-size: 14px; color: #475569;">
+                                            Él ya se encuentra revisando los detalles en <strong>{nombre_taller}</strong>.
+                                        </p>
+                                    </div>
+                                    
+                                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
+                                    
+                                    <div style="text-align: center;">
+                                        <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Puedes hacer seguimiento en tiempo real con tu código único:</p>
+                                        <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 22px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
+                                            {orden_actualizada.codigo_seguimiento}
+                                        </div>
                                     </div>
                                 </div>
                                 <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
-                                    <p style="margin: 0; font-size: 12px; color: #94a3b8;">Sistema de gestión SIGMA</p>
+                                    <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                                        Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
+                                    </p>
                                 </div>
                             </div>
                         </div>
                         """
                     }
-                    resp_tec = requests.post(url, json=payload, headers=headers)
-                    if resp_tec.status_code in [200, 201, 202]:
-                        print(f"Correo de asignación enviado exitosamente al técnico {tec_email}")
-                    else:
-                        print(f"Error Brevo al notificar al técnico: {resp_tec.text}")
+                    requests.post(url, json=payload, headers=headers)
                 except Exception as e:
-                    print(f"Excepción al conectar con Brevo para el técnico: {e}")
+                    print(f"Excepción al conectar con Brevo (notificar técnico asignado a cliente): {e}")
 
-        # 2. ENVIAR CORREO AL CLIENTE SI CAMBIó EL ESTADO DE LA ORDEN
+        # 2. NOTIFICAR AL CLIENTE SI CAMBIÓ EL ESTADO DE LA ORDEN
         if estado_anterior != orden_actualizada.estado:
             cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
             if cliente_email:
