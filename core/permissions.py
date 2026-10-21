@@ -83,14 +83,22 @@ class TieneModuloActivo(BasePermission):
         ).exists()
 
 
-class EsAdminTaller(BasePermission):
-    message = "Solo el administrador del taller puede realizar esta acción."
+class OrdenTrabajoViewSet(viewsets.ModelViewSet):
+    modulo_requerido = 'ordenes'
 
-    def has_permission(self, request, view):
-        usuario = request.user
+    def get_permissions(self):
+        usuario = self.request.user
+        
 
-        return bool(
-            usuario and 
-            usuario.is_authenticated and 
-            usuario.rol == 'admin_taller'
-        )
+        if getattr(usuario, 'rol', None) == 'cliente' or self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated, TieneModuloActivo]
+            
+
+        elif self.action in ['partial_update', 'update']:
+
+            permission_classes = [IsAuthenticated, TieneModuloActivo] 
+            
+        else:
+            permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
+            
+        return [permission() for permission in permission_classes]
