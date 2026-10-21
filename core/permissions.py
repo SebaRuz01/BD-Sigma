@@ -1,45 +1,5 @@
 from rest_framework.permissions import BasePermission
-
 from .models import ModuloContratado
-
-
-class TieneModuloActivo(BasePermission):
-    """
-    Permite el acceso solo si el taller del usuario autenticado
-    tiene contratado y activo el módulo indicado en `modulo_requerido`
-    del ViewSet que use este permiso.
-    """
-
-    message = "Tu taller no tiene contratado este módulo."
-
-    def has_permission(self, request, view):
-        modulo_slug = getattr(view, 'modulo_requerido', None)
-
-        if modulo_slug is None:
-            # Si el ViewSet no declara módulo, no se restringe por esta vía.
-            return True
-
-        usuario = request.user
-
-        if not usuario.is_authenticated:
-            return False
-
-        # El cliente no tiene taller asignado
-        if getattr(usuario, 'rol', None) == 'cliente':
-            return True
-
-        # El super-admin (sin taller asignado) siempre pasa.
-        if usuario.taller_id is None and usuario.rol == 'super_admin':
-            return True
-
-        if usuario.taller_id is None:
-            return False
-
-        return ModuloContratado.objects.filter(
-            taller_id=usuario.taller_id,
-            modulo__slug=modulo_slug,
-            activo=True
-        ).exists()
 
 
 class EsSuperAdmin(BasePermission):
@@ -48,6 +8,19 @@ class EsSuperAdmin(BasePermission):
     def has_permission(self, request, view):
         usuario = request.user
         return usuario.is_authenticated and usuario.rol == 'super_admin'
+
+
+class EsAdminTaller(BasePermission):
+    message = "Solo el administrador del taller puede realizar esta acción."
+
+    def has_permission(self, request, view):
+        usuario = request.user
+        # Validación estricta: Solo pasa si está autenticado y su rol es EXACTAMENTE 'admin_taller'
+        return bool(
+            usuario and 
+            usuario.is_authenticated and 
+            usuario.rol == 'admin_taller'
+        )
 
 
 class TieneModuloActivo(BasePermission):
@@ -81,24 +54,3 @@ class TieneModuloActivo(BasePermission):
             modulo__slug=modulo_slug,
             activo=True
         ).exists()
-
-
-class OrdenTrabajoViewSet(viewsets.ModelViewSet):
-    modulo_requerido = 'ordenes'
-
-    def get_permissions(self):
-        usuario = self.request.user
-        
-
-        if getattr(usuario, 'rol', None) == 'cliente' or self.action in ['list', 'retrieve']:
-            permission_classes = [IsAuthenticated, TieneModuloActivo]
-            
-
-        elif self.action in ['partial_update', 'update']:
-
-            permission_classes = [IsAuthenticated, TieneModuloActivo] 
-            
-        else:
-            permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
-            
-        return [permission() for permission in permission_classes]
