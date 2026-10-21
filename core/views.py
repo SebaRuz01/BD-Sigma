@@ -167,29 +167,44 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     modulo_requerido = 'ordenes'
 
     def get_permissions(self):
-        # Si es cliente o solo está listando/consultando una orden, no exigir EsAdminTaller
         usuario = self.request.user
+        
+        # 1. Clientes o acciones de solo lectura (ver listados y detalles): Permitido
         if getattr(usuario, 'rol', None) == 'cliente' or self.action in ['list', 'retrieve']:
             permission_classes = [IsAuthenticated, TieneModuloActivo]
+            
+        # 2. Mover órdenes en el Kanban o actualizar datos (PATCH/PUT): Permitido para Admin y Técnico
+        elif self.action in ['partial_update', 'update']:
+            permission_classes = [IsAuthenticated, TieneModuloActivo] 
+            
+        # 3. Crear (POST) y Eliminar (DELETE): Exclusivo para el Admin del Taller
         else:
             permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
+            
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         usuario = self.request.user
 
-        # Clientes: solo devuelven sus propias órdenes asociadas
+        # 1. Clientes: solo ven sus propias órdenes
         if getattr(usuario, 'rol', None) == 'cliente':
             return OrdenTrabajo.objects.filter(
                 Q(vehiculo__cliente__rut=f"APP-{usuario.id}") |
                 Q(vehiculo__cliente__email=usuario.email)
             ).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
-        # Super-admin sin taller: ve todas las órdenes
+        # 2. Super-admin sin taller: ve todas las órdenes de la plataforma
         if usuario.taller_id is None:
             return OrdenTrabajo.objects.all().select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
-        # Empleados y dueños de taller: ven las órdenes de su taller
+        # 3. TÉCNICOS: SÓLO VEN LAS ÓRDENES ASIGNADAS A ELLOS MISMOS
+        if getattr(usuario, 'rol', None) == 'tecnico':
+            return OrdenTrabajo.objects.filter(
+                taller_id=usuario.taller_id,
+                tecnico__usuario=usuario 
+            ).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
+
+        # 4. Admin de Taller: ve TODAS las órdenes de su taller
         return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
     def get_serializer_class(self):
@@ -198,7 +213,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajoSerializer
 
     def perform_create(self, serializer):
-        orden = serializer.save()
+        orden = serializer.save(taller=self.request.user.taller)
         
         cliente_email = orden.vehiculo.cliente.email if (orden.vehiculo and orden.vehiculo.cliente) else None
         if cliente_email:
@@ -233,26 +248,21 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                     "htmlContent": f"""
                     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
                         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                            
                             <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
                                 <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                                 <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                             </div>
-                            
                             <div style="padding: 40px 30px;">
                                 <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
                                 <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
                                     Hemos registrado exitosamente tu vehículo en <strong>{nombre_taller}</strong>.
                                 </p>
-                                
                                 <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
                                     <p style="margin: 0 0 10px 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Detalles del Ingreso</p>
                                     <p style="margin: 0 0 15px 0; font-size: 16px; color: #334155; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0;"><strong>Vehículo:</strong> {vehiculo_info}</p>
                                     {tecnico_html}
                                 </div>
-                                
                                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
-                                
                                 <div style="text-align: center;">
                                     <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Tu código único para seguimiento en línea:</p>
                                     <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
@@ -260,22 +270,16 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                     </div>
                                 </div>
                             </div>
-                            
                             <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
                                 <p style="margin: 0; font-size: 12px; color: #94a3b8;">
                                     Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
                                 </p>
                             </div>
-                            
                         </div>
                     </div>
                     """
                 }
-                response = requests.post(url, json=payload, headers=headers)
-                if response.status_code in [200, 201, 202]:
-                    print(f"Correo de creación enviado exitosamente vía Brevo a {cliente_email}")
-                else:
-                    print(f"Error Brevo al crear orden: {response.text}")
+                requests.post(url, json=payload, headers=headers)
             except Exception as e:
                 print(f"Excepción al conectar con Brevo (creación): {e}")
 
@@ -329,31 +333,25 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                         "htmlContent": f"""
                         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fb; padding: 40px 20px; margin: 0;">
                             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                                
                                 <div style="background-color: #0f172a; padding: 30px 20px; text-align: center;">
                                     <img src="https://i.ibb.co/8Zd31j3/logo-CAymw-Kvn.png" alt="SIGMA" style="height: 60px; width: auto; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;" />
                                     <p style="color: #94a3b8; margin: 0; font-size: 14px; letter-spacing: 1px;">Gestión de Taller Automotriz</p>
                                 </div>
-                                
                                 <div style="padding: 40px 30px;">
                                     <h2 style="margin-top: 0; color: #1e293b; font-size: 22px;">Hola {cliente_nombre},</h2>
                                     <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
                                         El estado de tu vehículo en <strong>{nombre_taller}</strong> ha sido actualizado.
                                     </p>
-                                    
                                     <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
                                         <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Nuevo Estado</p>
                                         <p style="margin: 10px 0 0 0; font-size: 24px; color: #2563eb; font-weight: 900;">
                                             {estado_formateado}
                                         </p>
                                     </div>
-                                    
                                     <div style="background-color: #f8fafc; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
                                         {tecnico_html}
                                     </div>
-                                    
                                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
-                                    
                                     <div style="text-align: center;">
                                         <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Tu código único de seguimiento en tiempo real:</p>
                                         <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
@@ -361,22 +359,16 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                         </div>
                                     </div>
                                 </div>
-                                
                                 <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
                                     <p style="margin: 0; font-size: 12px; color: #94a3b8;">
                                         Este es un correo automático generado por el sistema SIGMA.<br>Por favor no respondas a este mensaje.
                                     </p>
                                 </div>
-                                
                             </div>
                         </div>
                         """
                     }
-                    response = requests.post(url, json=payload, headers=headers)
-                    if response.status_code in [200, 201, 202]:
-                        print(f"Correo de actualización enviado exitosamente vía Brevo a {cliente_email}")
-                    else:
-                        print(f"Error de Brevo al enviar correo de actualización: {response.text}")
+                    requests.post(url, json=payload, headers=headers)
                 except Exception as e:
                     print(f"Excepción al conectar con Brevo en actualización: {e}")
 
