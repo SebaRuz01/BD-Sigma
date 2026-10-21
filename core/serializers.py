@@ -156,28 +156,33 @@ class TecnicoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_nombre(self, obj):
+        if not obj.usuario:
+            return "Sin nombre"
         nombre_completo = f"{obj.usuario.first_name} {obj.usuario.last_name}".strip()
         return nombre_completo or obj.usuario.username
 
     def get_vehiculos(self, obj):
-        ordenes = bajo.objects.filter(tecnico=obj, vehiculo__isnull=False).select_related('vehiculo', 'vehiculo__cliente')
-        vehiculos_lista = []
-        patentes_vistas = set()
-        
-        for orden in ordenes:
-            vehiculo = orden.vehiculo
-            if vehiculo and vehiculo.patente not in patentes_vistas:
-                patentes_vistas.add(vehiculo.patente)
-                cliente_nombre = "Sin nombre"
-                if vehiculo.cliente and vehiculo.cliente.nombre:
-                    cliente_nombre = vehiculo.cliente.nombre
-                
-                vehiculos_lista.append({
-                    'patente': vehiculo.patente,
-                    'modelo': vehiculo.modelo or 'Vehículo',
-                    'cliente_nombre': cliente_nombre
-                })
-        return vehiculos_lista
+        try:
+            ordenes = OrdenTrabajo.objects.filter(tecnico=obj, vehiculo__isnull=False).select_related('vehiculo', 'vehiculo__cliente')
+            vehiculos_lista = []
+            patentes_vistas = set()
+            
+            for orden in ordenes:
+                vehiculo = orden.vehiculo
+                if vehiculo and vehiculo.patente and vehiculo.patente not in patentes_vistas:
+                    patentes_vistas.add(vehiculo.patente)
+                    cliente_nombre = "Sin nombre"
+                    if vehiculo.cliente and vehiculo.cliente.nombre:
+                        cliente_nombre = vehiculo.cliente.nombre
+                    
+                    vehiculos_lista.append({
+                        'patente': vehiculo.patente,
+                        'modelo': vehiculo.modelo or 'Vehículo',
+                        'cliente_nombre': cliente_nombre
+                    })
+            return vehiculos_lista
+        except Exception:
+            return []
 
 
 class TecnicoCreateSerializer(serializers.ModelSerializer):
@@ -276,13 +281,12 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         modelo = obj.vehiculo.modelo
         patente = obj.vehiculo.patente
         
-        if modelo:
+        if modelo and modelo.strip():
             return modelo
         return patente or "Vehículo sin identificar"
 
 
 class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
-    # Campos del cliente enviados desde el formulario de React
     cliente_nombre = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cliente_rut = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cliente_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
@@ -292,7 +296,6 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
     cliente_region = serializers.CharField(write_only=True, required=False, allow_blank=True)
     cliente_comuna = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
-    # Campos del vehículo enviados desde el formulario de React
     marca = serializers.CharField(write_only=True, required=False, allow_blank=True)
     modelo = serializers.CharField(write_only=True, required=False, allow_blank=True)
     vehiculo_patente = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -309,13 +312,11 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get('request')
         
-        # 1. Asignar taller automáticamente
         taller = None
         if request and hasattr(request, 'user') and request.user.taller:
             taller = request.user.taller
             validated_data['taller'] = taller
 
-        # 2. Extraer datos del cliente
         c_nombre = validated_data.pop('cliente_nombre', '')
         c_rut = validated_data.pop('cliente_rut', '')
         c_email = validated_data.pop('cliente_email', '')
@@ -325,13 +326,11 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
         c_region = validated_data.pop('cliente_region', '')
         c_comuna = validated_data.pop('cliente_comuna', '')
 
-        # 3. Extraer datos del vehículo
         marca = validated_data.pop('marca', '')
         modelo_seleccionado = validated_data.pop('modelo', '')
         patente = validated_data.pop('vehiculo_patente', '')
         anio = validated_data.pop('vehiculo_anio', None)
 
-        # 4. Gestionar Comuna del cliente
         comuna_obj = None
         if c_comuna:
             comuna_obj, _ = Comuna.objects.get_or_create(
@@ -339,7 +338,6 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
                 defaults={'region': (c_region or 'Sin especificar').strip()}
             )
 
-        # 5. Crear o actualizar el Cliente
         cliente_obj = None
         if c_rut and taller:
             cliente_obj, _ = Cliente.objects.update_or_create(
@@ -355,13 +353,11 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
                 }
             )
 
-        # 6. Unir marca y modelo en formato "MARCA - MODELO"
         if marca and modelo_seleccionado:
             modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
             modelo_final = modelo_seleccionado or marca
 
-        # 7. Crear o actualizar el Vehículo vinculado al cliente
         if patente:
             vehiculo_obj, _ = Vehiculo.objects.update_or_create(
                 patente=patente.upper().strip(),
@@ -373,7 +369,6 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
             )
             validated_data['vehiculo'] = vehiculo_obj
 
-        # Limpiar campos temporales por seguridad
         for campo in ['cliente_nombre', 'cliente_rut', 'cliente_email', 'cliente_telefono', 
                       'cliente_calle', 'cliente_numero', 'cliente_region', 'cliente_comuna',
                       'marca', 'modelo', 'vehiculo_patente', 'vehiculo_anio']:
