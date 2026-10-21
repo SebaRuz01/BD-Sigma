@@ -395,3 +395,31 @@ class CitaSerializer(serializers.ModelSerializer):
         return Cita.objects.create(
             cliente=cliente, vehiculo=vehiculo, estado='pendiente', **validated_data
         )
+
+class VehiculoCreateSerializer(serializers.ModelSerializer):
+    marca = serializers.CharField(write_only=True, required=False)
+    modelo_vehiculo = serializers.CharField(write_only=True, source='modelo', required=False)
+
+    class Meta:
+        model = Vehiculo
+        fields = ['patente', 'marca', 'modelo_vehiculo', 'anio', 'cliente']
+
+    def create(self, validated_data):
+        # Extraemos la marca y el modelo que seleccionó el usuario
+        marca = validated_data.pop('marca', '')
+        modelo_seleccionado = validated_data.pop('modelo', '')
+        
+        # Los unimos en el formato exacto que quieres para la columna 'modelo'
+        if marca and modelo_seleccionado:
+            modelo_final = f"{marca} - {modelo_seleccionado}"
+        else:
+            modelo_final = modelo_seleccionado or marca
+
+        # Guardamos en la base de datos combinando marca - modelo, y el año aparte
+        vehiculo = Vehiculo.objects.create(
+            modelo=modelo_final,
+            patente=validated_data.get('patente'),
+            anio=validated_data.get('anio'),
+            cliente=validated_data.get('cliente')
+        )
+        return vehiculo
