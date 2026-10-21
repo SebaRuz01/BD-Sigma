@@ -160,7 +160,7 @@ class TecnicoSerializer(serializers.ModelSerializer):
         return nombre_completo or obj.usuario.username
 
     def get_vehiculos(self, obj):
-        ordenes = OrdenTrabajo.objects.filter(tecnico=obj, vehiculo__isnull=False).select_related('vehiculo', 'vehiculo__cliente')
+        ordenes = bajo.objects.filter(tecnico=obj, vehiculo__isnull=False).select_related('vehiculo', 'vehiculo__cliente')
         vehiculos_lista = []
         patentes_vistas = set()
         
@@ -247,6 +247,9 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
     cliente_telefono = serializers.SerializerMethodField()
     equipo = serializers.SerializerMethodField()
     patente = serializers.CharField(source='vehiculo.patente', read_only=True)
+    
+    vehiculo_anio = serializers.IntegerField(source='vehiculo.anio', read_only=True, default=None)
+    
     repuestos_usados = OrdenRepuestoSerializer(many=True, read_only=True)
 
     class Meta:
