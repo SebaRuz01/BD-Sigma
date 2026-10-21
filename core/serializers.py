@@ -15,7 +15,6 @@ class ComunaSerializer(serializers.ModelSerializer):
 
 
 class TallerSerializer(serializers.ModelSerializer):
-    # Declaramos los campos explícitamente para que el PATCH no los ignore
     comuna_nombre = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     comuna_region = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
@@ -24,18 +23,15 @@ class TallerSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def to_representation(self, instance):
-        # Al enviar datos al frontend, extraemos el texto de la relación
         data = super().to_representation(instance)
         data['comuna_nombre'] = instance.comuna.nombre if instance.comuna else ''
         data['comuna_region'] = instance.comuna.region if instance.comuna else ''
         return data
 
     def update(self, instance, validated_data):
-        # Extraemos comuna_nombre y comuna_region de forma segura
         c_nombre = validated_data.pop('comuna_nombre', None)
         c_region = validated_data.pop('comuna_region', None)
         
-        # Procesamos la creación/búsqueda en la BD
         if c_nombre is not None:
             if c_nombre.strip() == '':
                 instance.comuna = None
@@ -46,7 +42,6 @@ class TallerSerializer(serializers.ModelSerializer):
                 )
                 instance.comuna = comuna
 
-        # Guardamos el resto de los campos estandar (calle, numero, rubro, etc)
         return super().update(instance, validated_data)
 
 
@@ -133,11 +128,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
 
-        # 1. Rescatamos el dato 'origen' que enviaremos desde el front (por defecto asumimos 'web' por seguridad)
         request = self.context.get('request')
         origen = request.data.get('origen', 'web') if request else 'web'
 
-        # 2. REGLA DE BLOQUEO: Si es cliente y NO viene de la app -> Bloqueado
         if self.user.rol == 'cliente' and origen != 'mobile':
             raise AuthenticationFailed('Los clientes solo pueden iniciar sesión desde la App Móvil.')
         
@@ -146,11 +139,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
         token['taller_id'] = user.taller_id
         token['rol'] = user.rol
         token['username'] = user.username
-        
         return token
 
 
@@ -291,21 +282,27 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenTrabajo
         fields = '__all__'
+        extra_kwargs = {
+            'taller': {'required': False},
+            'vehiculo': {'required': False},
+        }
 
     def create(self, validated_data):
+        request = self.context.get('request')
+        
+        if request and hasattr(request, 'user') and request.user.taller:
+            validated_data['taller'] = request.user.taller
+
         marca = validated_data.pop('marca', '')
         modelo_seleccionado = validated_data.pop('modelo', '')
         patente = validated_data.pop('vehiculo_patente', '')
         anio = validated_data.pop('vehiculo_anio', None)
 
-        # Unimos marca y modelo en formato "MARCA - MODELO"
         if marca and modelo_seleccionado:
             modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
             modelo_final = modelo_seleccionado or marca
 
-        # Creamos o actualizamos el vehículo asociado
-        vehiculo_obj = None
         if patente:
             vehiculo_obj, _ = Vehiculo.objects.update_or_create(
                 patente=patente.upper().strip(),
@@ -316,13 +313,13 @@ class OrdenTrabajoCreateSerializer(serializers.ModelSerializer):
             )
             validated_data['vehiculo'] = vehiculo_obj
 
-        # Eliminamos por si acaso campos sueltos que no pertenezcan directamente a la tabla OrdenTrabajo
         validated_data.pop('marca', None)
         validated_data.pop('modelo', None)
         validated_data.pop('vehiculo_patente', None)
         validated_data.pop('vehiculo_anio', None)
 
         return super().create(validated_data)
+
 
 class CitaSerializer(serializers.ModelSerializer):
     taller_id = serializers.PrimaryKeyRelatedField(source='taller', queryset=Taller.objects.all())
@@ -331,7 +328,6 @@ class CitaSerializer(serializers.ModelSerializer):
 
     taller_nombre = serializers.CharField(source='taller.nombre_comercial', read_only=True)
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
-    # AQUÍ ESTABA EL ERROR DEL PARÉNTESIS, YA ESTÁ CORREGIDO.
     vehiculo_patente = serializers.CharField(source='vehiculo.patente', read_only=True, default=None)
 
     class Meta:
@@ -377,6 +373,7 @@ class CitaSerializer(serializers.ModelSerializer):
             cliente=cliente, vehiculo=vehiculo, estado='pendiente', **validated_data
         )
 
+
 class VehiculoCreateSerializer(serializers.ModelSerializer):
     marca = serializers.CharField(write_only=True, required=False)
     modelo_vehiculo = serializers.CharField(write_only=True, source='modelo', required=False)
@@ -386,17 +383,14 @@ class VehiculoCreateSerializer(serializers.ModelSerializer):
         fields = ['patente', 'marca', 'modelo_vehiculo', 'anio', 'cliente']
 
     def create(self, validated_data):
-        # Extraemos la marca y el modelo que seleccionó el usuario
         marca = validated_data.pop('marca', '')
         modelo_seleccionado = validated_data.pop('modelo', '')
         
-        # Los unimos en el formato exacto que quieres para la columna 'modelo'
         if marca and modelo_seleccionado:
             modelo_final = f"{marca} - {modelo_seleccionado}"
         else:
             modelo_final = modelo_seleccionado or marca
 
-        # Guardamos en la base de datos combinando marca - modelo, y el año aparte
         vehiculo = Vehiculo.objects.create(
             modelo=modelo_final,
             patente=validated_data.get('patente'),
