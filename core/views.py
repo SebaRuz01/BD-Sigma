@@ -104,7 +104,16 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         usuario = self.request.user
         if usuario.taller_id is None:
             return Tecnico.objects.all()
-        return Tecnico.objects.filter(taller_id=usuario.taller_id)
+        
+        taller = usuario.taller
+        qs = Tecnico.objects.filter(taller_id=taller.id).order_by('id')
+
+        # Si el taller tiene Plan Profesional (plan_id == 1), limitamos el uso operativo a los primeros 5 técnicos
+        if taller and taller.plan_id == 1:
+            primeros_ids = list(qs.values_list('id', flat=True)[:5])
+            qs = qs.filter(id__in=primeros_ids)
+
+        return qs
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -112,12 +121,6 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         return TecnicoSerializer
 
     def perform_create(self, serializer):
-        # Validación opcional para limitar técnicos en Plan Profesional (Plan 1)
-        taller = self.request.user.taller
-        if taller and taller.plan_id == 1:
-            tecnicos_actuales = Tecnico.objects.filter(taller=taller).count()
-            if tecnicos_actuales >= 5:
-                raise ValidationError("Has alcanzado el límite de 5 técnicos permitidos en tu Plan Profesional. Actualiza al Plan Empresas para técnicos ilimitados.")
         serializer.save(taller_id=self.request.user.taller_id)
 
 
@@ -608,10 +611,10 @@ class CalcularEstimacionIAView(APIView):
         try:
             taller = request.user.taller
             
-            # Restricción estricta de plan: la IA solo está disponible para el Plan Empresas (plan_id = 2)
+            # RESTRICCIÓN DE PLAN: La IA solo está permitida en Plan Empresas (plan_id == 2)
             if not taller or taller.plan_id != 2:
                 return Response({
-                    'error': 'La estimación de fechas con Inteligencia Artificial es exclusiva del Plan Empresas. Actualiza tu plan para activarla.'
+                    'error': 'La estimación de fechas con Inteligencia Artificial es exclusiva del Plan Empresas.'
                 }, status=status.HTTP_403_FORBIDDEN)
 
             orden = OrdenTrabajo.objects.get(pk=pk, taller=taller)
@@ -646,7 +649,6 @@ class EnviarCorreoEstimacionView(APIView):
         try:
             taller = request.user.taller
             
-            # Validación de plan también requerida para el envío automatizado de la IA
             if not taller or taller.plan_id != 2:
                 return Response({
                     'error': 'Esta función avanzada de notificaciones por IA requiere el Plan Empresas.'
