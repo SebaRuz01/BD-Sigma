@@ -22,6 +22,11 @@ class Taller(models.Model):
         ('prueba', 'Prueba'),
     ]
 
+    PLANES = [
+        (1, 'Plan Profesional'),
+        (2, 'Plan Empresas'),
+    ]
+
     comuna = models.ForeignKey(Comuna, on_delete=models.PROTECT, null=True, blank=True, related_name='talleres')
     nombre_comercial = models.CharField(max_length=150)
     rut = models.CharField(max_length=20, unique=True)
@@ -29,10 +34,11 @@ class Taller(models.Model):
     calle = models.CharField(max_length=150, blank=True)
     numero = models.CharField(max_length=20, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='prueba')
+    plan_id = models.IntegerField(choices=PLANES, default=1)  # 1: Profesional, 2: Empresas
     fecha_alta = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.nombre_comercial
+        return f"{self.nombre_comercial} (Plan {self.plan_id})"
 
 
 class Usuario(AbstractUser):
