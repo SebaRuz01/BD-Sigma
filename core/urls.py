@@ -8,7 +8,7 @@ from .views import (
     OrdenTrabajoViewSet, OrdenRepuestoViewSet,
     ComunaViewSet, ClienteViewSet,PasswordResetRequestView, PasswordResetConfirmView, VehiculoViewSet,
     OrdenPublicaView, CitaViewSet, CalcularEstimacionIAView,
-    EnviarCorreoEstimacionView,
+    EnviarCorreoEstimacionView, crear_solicitud_contacto,
 )
 
 router = DefaultRouter()
@@ -34,4 +34,5 @@ urlpatterns = router.urls + [
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('ordenes/<int:pk>/estimar-ia/', CalcularEstimacionIAView.as_view()),
     path('ordenes/<int:pk>/enviar-correo/', EnviarCorreoEstimacionView.as_view()),
+    path('api/contacto/', crear_solicitud_contacto, name='crear_solicitud_contacto'),
 ]
