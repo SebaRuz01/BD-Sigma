@@ -105,15 +105,8 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         if usuario.taller_id is None:
             return Tecnico.objects.all()
         
-        taller = usuario.taller
-        qs = Tecnico.objects.filter(taller_id=taller.id).order_by('id')
-
-        # Si el taller tiene Plan Profesional (plan_id == 1), limitamos el uso operativo a los primeros 5 técnicos
-        if taller and taller.plan_id == 1:
-            primeros_ids = list(qs.values_list('id', flat=True)[:5])
-            qs = qs.filter(id__in=primeros_ids)
-
-        return qs
+        # Devolvemos todos los técnicos ordenados por ID para que el frontend pueda mostrarlos completos y aplicar el bloqueo visual a los excedentes
+        return Tecnico.objects.filter(taller_id=usuario.taller_id).order_by('id')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -121,7 +114,15 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         return TecnicoSerializer
 
     def perform_create(self, serializer):
-        serializer.save(taller_id=self.request.user.taller_id)
+        taller = self.request.user.taller
+        
+        # Si el taller está en Plan Profesional (1), limitamos la creación de nuevos técnicos si ya tiene 5 o más
+        if taller and taller.plan_id == 1:
+            total_actuales = Tecnico.objects.filter(taller=taller).count()
+            if total_actuales >= 5:
+                raise ValidationError("Has alcanzado el límite de 5 técnicos activos en tu Plan Profesional. Actualiza al Plan Empresas para agregar más.")
+                
+        serializer.save(taller_id=taller.id if taller else self.request.user.taller_id)
 
 
 class RepuestoViewSet(viewsets.ModelViewSet):
@@ -611,7 +612,6 @@ class CalcularEstimacionIAView(APIView):
         try:
             taller = request.user.taller
             
-            # RESTRICCIÓN DE PLAN: La IA solo está permitida en Plan Empresas (plan_id == 2)
             if not taller or taller.plan_id != 2:
                 return Response({
                     'error': 'La estimación de fechas con Inteligencia Artificial es exclusiva del Plan Empresas.'
