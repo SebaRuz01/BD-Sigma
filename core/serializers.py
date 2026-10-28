@@ -4,8 +4,9 @@ from rest_framework.exceptions import AuthenticationFailed
 from .models import (
     Taller, Usuario, Modulo, ModuloContratado,
     Tecnico, Repuesto, OrdenTrabajo, OrdenRepuesto,
-    Comuna, Cliente, Vehiculo, Cita
+    Comuna, Cliente, Vehiculo, Cita, SolicitudContacto
 )
+
 
 
 class ComunaSerializer(serializers.ModelSerializer):
@@ -454,3 +455,9 @@ class VehiculoCreateSerializer(serializers.ModelSerializer):
             cliente=validated_data.get('cliente')
         )
         return vehiculo
+
+
+class SolicitudContactoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SolicitudContacto
+        fields = ['id', 'nombre_taller', 'nombre_contacto', 'email', 'telefono', 'plan', 'mensaje', 'fecha_creacion']
