@@ -4,6 +4,7 @@ from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -28,8 +29,10 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     TecnicoCreateSerializer,
     TallerCreateSerializer,
-    ComunaSerializer, ClienteSerializer, VehiculoSerializer, CitaSerializer
+    ComunaSerializer, ClienteSerializer, VehiculoSerializer, CitaSerializer, SolicitudContactoSerializer
 )
+
+
 
 
 class TallerViewSet(viewsets.ModelViewSet):
@@ -739,3 +742,17 @@ class EnviarCorreoEstimacionView(APIView):
             return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': f'Error interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny]) # <--- CLAVE: No pide token ni autorización al visitante
+def crear_solicitud_contacto(request):
+    serializer = SolicitudContactoSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save() # Se guarda directo en PostgreSQL
+        return Response(
+            {"mensaje": "Solicitud guardada correctamente en la base de datos."}, 
+            status=status.HTTP_201_CREATED
+        )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
