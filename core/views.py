@@ -111,6 +111,15 @@ class TecnicoViewSet(viewsets.ModelViewSet):
             return TecnicoCreateSerializer
         return TecnicoSerializer
 
+    def perform_create(self, serializer):
+        # Validación opcional para limitar técnicos en Plan Profesional (Plan 1)
+        taller = self.request.user.taller
+        if taller and taller.plan_id == 1:
+            tecnicos_actuales = Tecnico.objects.filter(taller=taller).count()
+            if tecnicos_actuales >= 5:
+                raise ValidationError("Has alcanzado el límite de 5 técnicos permitidos en tu Plan Profesional. Actualiza al Plan Empresas para técnicos ilimitados.")
+        serializer.save(taller_id=self.request.user.taller_id)
+
 
 class RepuestoViewSet(viewsets.ModelViewSet):
     serializer_class = RepuestoSerializer
@@ -169,15 +178,10 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         usuario = self.request.user
         
-        # 1. Clientes o acciones de solo lectura (ver listados y detalles): Permitido
         if getattr(usuario, 'rol', None) == 'cliente' or self.action in ['list', 'retrieve']:
             permission_classes = [IsAuthenticated, TieneModuloActivo]
-            
-        # 2. Mover órdenes en el Kanban o actualizar datos (PATCH/PUT): Permitido para Admin y Técnico
         elif self.action in ['partial_update', 'update']:
-            permission_classes = [IsAuthenticated, TieneModuloActivo] 
-            
-        # 3. Crear (POST) y Eliminar (DELETE): Exclusivo para el Admin del Taller
+            permission_classes = [IsAuthenticated, TieneModuloActivo]    
         else:
             permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
             
@@ -186,25 +190,21 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         usuario = self.request.user
 
-        # 1. Clientes: solo ven sus propias órdenes
         if getattr(usuario, 'rol', None) == 'cliente':
             return OrdenTrabajo.objects.filter(
                 Q(vehiculo__cliente__rut=f"APP-{usuario.id}") |
                 Q(vehiculo__cliente__email=usuario.email)
             ).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
-        # 2. Super-admin sin taller: ve todas las órdenes de la plataforma
         if usuario.taller_id is None:
             return OrdenTrabajo.objects.all().select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
-        # 3. TÉCNICOS: SÓLO VEN LAS ÓRDENES ASIGNADAS A ELLOS MISMOS
         if getattr(usuario, 'rol', None) == 'tecnico':
             return OrdenTrabajo.objects.filter(
                 taller_id=usuario.taller_id,
                 tecnico__usuario=usuario 
             ).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
-        # 4. Admin de Taller: ve TODAS las órdenes de su taller
         return OrdenTrabajo.objects.filter(taller_id=usuario.taller_id).select_related('taller', 'vehiculo', 'tecnico', 'tecnico__usuario')
 
     def get_serializer_class(self):
@@ -289,7 +289,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
         orden_actualizada = serializer.save()
         
-        # 1. NOTIFICAR AL CLIENTE SOLO CUANDO SE ASIGNA UN TÉCNICO A UNA ORDEN QUE NO TENÍA
         if tecnico_id_anterior is None and orden_actualizada.tecnico is not None:
             cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
             if cliente_email:
@@ -326,7 +325,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                     <p style="font-size: 16px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
                                         Queremos contarte que ya se ha asignado al técnico especialista que estará a cargo de seguir de cerca el diagnóstico y cuidado de tu vehículo (<strong>{vehiculo_info}</strong>).
                                     </p>
-                                    
                                     <div style="text-align: center; margin: 30px 0; padding: 25px; background-color: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
                                         <p style="margin: 0; font-size: 13px; color: #166534; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Especialista Asignado</p>
                                         <p style="margin: 12px 0 0 0; font-size: 22px; color: #15803d; font-weight: 800;">
@@ -336,9 +334,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                                             Él ya se encuentra revisando los detalles en <strong>{nombre_taller}</strong>.
                                         </p>
                                     </div>
-                                    
                                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 35px 0;" />
-                                    
                                     <div style="text-align: center;">
                                         <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">Puedes hacer seguimiento en tiempo real con tu código único:</p>
                                         <div style="display: inline-block; background-color: #1e293b; color: #ffffff; font-size: 22px; font-weight: bold; letter-spacing: 4px; padding: 12px 25px; border-radius: 8px;">
@@ -359,7 +355,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     print(f"Excepción al conectar con Brevo (notificar técnico asignado a cliente): {e}")
 
-        # 2. NOTIFICAR AL CLIENTE SI CAMBIÓ EL ESTADO DE LA ORDEN
         if estado_anterior != orden_actualizada.estado:
             cliente_email = orden_actualizada.vehiculo.cliente.email if (orden_actualizada.vehiculo and orden_actualizada.vehiculo.cliente) else None
             if cliente_email:
@@ -611,9 +606,17 @@ class CalcularEstimacionIAView(APIView):
 
     def post(self, request, pk):
         try:
-            orden = OrdenTrabajo.objects.get(pk=pk, taller=request.user.taller)
+            taller = request.user.taller
             
-            entregadas = OrdenTrabajo.objects.filter(taller=request.user.taller, estado='entregado')
+            # Restricción estricta de plan: la IA solo está disponible para el Plan Empresas (plan_id = 2)
+            if not taller or taller.plan_id != 2:
+                return Response({
+                    'error': 'La estimación de fechas con Inteligencia Artificial es exclusiva del Plan Empresas. Actualiza tu plan para activarla.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            orden = OrdenTrabajo.objects.get(pk=pk, taller=taller)
+            
+            entregadas = OrdenTrabajo.objects.filter(taller=taller, estado='entregado')
             entrenar_modelo_prediccion(entregadas)
 
             num_repuestos = orden.repuestos_usados.count()
@@ -641,7 +644,15 @@ class EnviarCorreoEstimacionView(APIView):
 
     def post(self, request, pk):
         try:
-            orden = OrdenTrabajo.objects.get(pk=pk, taller=request.user.taller)
+            taller = request.user.taller
+            
+            # Validación de plan también requerida para el envío automatizado de la IA
+            if not taller or taller.plan_id != 2:
+                return Response({
+                    'error': 'Esta función avanzada de notificaciones por IA requiere el Plan Empresas.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            orden = OrdenTrabajo.objects.get(pk=pk, taller=taller)
             
             if not orden.fecha_estimada:
                 return Response({'error': 'No hay fecha estimada calculada.'}, status=status.HTTP_400_BAD_REQUEST)
