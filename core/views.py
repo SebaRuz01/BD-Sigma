@@ -105,7 +105,7 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         if usuario.taller_id is None:
             return Tecnico.objects.all()
         
-        # Devolvemos todos los técnicos ordenados por ID para que el frontend pueda mostrarlos completos y aplicar el bloqueo visual a los excedentes
+        # Devolvemos todos los técnicos ordenados por ID para mostrarlos en el frontend con sus estados (normales y bloqueados)
         return Tecnico.objects.filter(taller_id=usuario.taller_id).order_by('id')
 
     def get_serializer_class(self):
@@ -116,7 +116,6 @@ class TecnicoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         taller = self.request.user.taller
         
-        # Si el taller está en Plan Profesional (1), limitamos la creación de nuevos técnicos si ya tiene 5 o más
         if taller and taller.plan_id == 1:
             total_actuales = Tecnico.objects.filter(taller=taller).count()
             if total_actuales >= 5:
@@ -217,7 +216,16 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         return OrdenTrabajoSerializer
 
     def perform_create(self, serializer):
-        orden = serializer.save(taller_id=self.request.user.taller_id)
+        taller = self.request.user.taller
+        tecnico = serializer.validated_data.get('tecnico')
+
+        # VALIDACIÓN DE TÉCNICOS EXCEDIDOS EN PLAN PROFESIONAL (plan_id == 1)
+        if taller and taller.plan_id == 1 and tecnico:
+            primeros_ids = list(Tecnico.objects.filter(taller=taller).order_by('id').values_list('id', flat=True)[:5])
+            if tecnico.id not in primeros_ids:
+                raise ValidationError("No puedes asignar este técnico porque supera el límite de 5 técnicos activos de tu Plan Profesional. Actualiza al Plan Empresas o elimina técnicos excedentes.")
+
+        orden = serializer.save(taller_id=taller.id if taller else self.request.user.taller_id)
         
         cliente_email = orden.vehiculo.cliente.email if (orden.vehiculo and orden.vehiculo.cliente) else None
         if cliente_email:
@@ -284,10 +292,18 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 }
                 requests.post(url, json=payload, headers=headers)
             except Exception as e:
-                print(f"Excepción al conectar con Brevo (creación): {e}")
+                print(f"Excepción al conectarกับ Brevo (creación): {e}")
 
     def perform_update(self, serializer):
         orden_antigua = self.get_object()
+        taller = orden_antigua.taller
+        tecnico_nuevo = serializer.validated_data.get('tecnico')
+
+        if taller and taller.plan_id == 1 and tecnico_nuevo:
+            primeros_ids = list(Tecnico.objects.filter(taller=taller).order_by('id').values_list('id', flat=True)[:5])
+            if tecnico_nuevo.id not in primeiros_ids if 'primeros_ids' in locals() else tecnico_nuevo.id not in primeros_ids:
+                raise ValidationError("No puedes asignar este técnico porque supera el límite de 5 técnicos activos de tu Plan Profesional.")
+
         estado_anterior = orden_antigua.estado
         tecnico_id_anterior = orden_antigua.tecnico_id
 
