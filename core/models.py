@@ -212,3 +212,26 @@ class Cita(models.Model):
 
     def __str__(self):
         return f"Cita {self.id} — {self.cliente.nombre} ({self.estado})"
+
+class SolicitudContacto(models.Model):
+    PLAN_CHOICES = [
+        ('Profesional', 'Plan Profesional'),
+        ('Empresas', 'Plan Empresas'),
+    ]
+
+    nombre_taller = models.CharField(max_length=60)
+    nombre_contacto = models.CharField(max_length=60)
+    email = models.EmailField(max_length=80)
+    telefono = models.CharField(max_length=15)
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='Profesional')
+    mensaje = models.TextField(max_length=300, blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    leido = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Solicitud de Contacto'
+        verbose_name_plural = 'Solicitudes de Contacto'
+
+    def __str__(self):
+        return f"{self.nombre_taller} - Plan {self.plan} ({self.nombre_contacto})"
