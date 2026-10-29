@@ -98,8 +98,14 @@ class VehiculoViewSet(viewsets.ModelViewSet):
 
 
 class TecnicoViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, TieneModuloActivo]
     modulo_requerido = 'tecnicos'
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated, TieneModuloActivo]
+        else:
+            permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         usuario = self.request.user
@@ -126,8 +132,14 @@ class TecnicoViewSet(viewsets.ModelViewSet):
 
 class RepuestoViewSet(viewsets.ModelViewSet):
     serializer_class = RepuestoSerializer
-    permission_classes = [IsAuthenticated, TieneModuloActivo]
     modulo_requerido = 'inventario'
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated, TieneModuloActivo]
+        else:
+            permission_classes = [IsAuthenticated, TieneModuloActivo, EsAdminTaller]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         usuario = self.request.user
