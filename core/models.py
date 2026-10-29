@@ -213,6 +213,7 @@ class Cita(models.Model):
     def __str__(self):
         return f"Cita {self.id} — {self.cliente.nombre} ({self.estado})"
 
+
 class SolicitudContacto(models.Model):
     PLAN_CHOICES = [
         ('Profesional', 'Plan Profesional'),
