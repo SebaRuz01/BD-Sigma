@@ -33,8 +33,6 @@ from .serializers import (
 )
 
 
-
-
 class TallerViewSet(viewsets.ModelViewSet):
     queryset = Taller.objects.all()
 
@@ -108,7 +106,6 @@ class TecnicoViewSet(viewsets.ModelViewSet):
         if usuario.taller_id is None:
             return Tecnico.objects.all()
         
-        # Devolvemos todos los técnicos ordenados por ID para mostrarlos en el frontend con sus estados (normales y bloqueados)
         return Tecnico.objects.filter(taller_id=usuario.taller_id).order_by('id')
 
     def get_serializer_class(self):
@@ -222,7 +219,6 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         taller = self.request.user.taller
         tecnico = serializer.validated_data.get('tecnico')
 
-        # VALIDACIÓN DE TÉCNICOS EXCEDIDOS EN PLAN PROFESIONAL (plan_id == 1)
         if taller and taller.plan_id == 1 and tecnico:
             primeros_ids = list(Tecnico.objects.filter(taller=taller).order_by('id').values_list('id', flat=True)[:5])
             if tecnico.id not in primeros_ids:
@@ -295,7 +291,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
                 }
                 requests.post(url, json=payload, headers=headers)
             except Exception as e:
-                print(f"Excepción al conectarกับ Brevo (creación): {e}")
+                print(f"Excepción al conectar con Brevo (creación): {e}")
 
     def perform_update(self, serializer):
         orden_antigua = self.get_object()
@@ -304,7 +300,7 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
         if taller and taller.plan_id == 1 and tecnico_nuevo:
             primeros_ids = list(Tecnico.objects.filter(taller=taller).order_by('id').values_list('id', flat=True)[:5])
-            if tecnico_nuevo.id not in primeiros_ids if 'primeros_ids' in locals() else tecnico_nuevo.id not in primeros_ids:
+            if tecnico_nuevo.id not in primeros_ids:
                 raise ValidationError("No puedes asignar este técnico porque supera el límite de 5 técnicos activos de tu Plan Profesional.")
 
         estado_anterior = orden_antigua.estado
@@ -744,13 +740,45 @@ class EnviarCorreoEstimacionView(APIView):
             return Response({'error': f'Error interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 @api_view(['POST'])
-@permission_classes([AllowAny]) # <--- CLAVE: No pide token ni autorización al visitante
+@permission_classes([AllowAny])
 def crear_solicitud_contacto(request):
     serializer = SolicitudContactoSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save() # Se guarda directo en PostgreSQL
+        solicitud = serializer.save()
+        
+        try:
+            url = "https://api.brevo.com/v3/smtp/email"
+            headers = {
+                "accept": "application/json",
+                "api-key": os.environ.get("BREVO_API_KEY"),
+                "content-type": "application/json"
+            }
+            payload = {
+                "sender": {"name": "Sistema SIGMA", "email": "sebaruz2004@gmail.com"},
+                "to": [{"email": "sebaruz2004@gmail.com"}],
+                "subject": f"Nueva Solicitud de Contratación - Plan {solicitud.plan} ({solicitud.nombre_taller})",
+                "htmlContent": f"""
+                <div style="font-family: Arial, sans-serif; background-color: #f3f6fb; padding: 30px;">
+                    <div style="max-width: 600px; margin: 0 auto; background: #090d16; color: #ffffff; border-radius: 16px; padding: 30px;">
+                        <h2 style="color: #ffffff; margin-top: 0;">Nueva Solicitud de Contratación</h2>
+                        <p style="color: #94a3b8; font-size: 14px;">Un nuevo taller ha solicitado activar su cuenta en la plataforma.</p>
+                        <div style="background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 5px 0;"><strong>Taller:</strong> {solicitud.nombre_taller}</p>
+                            <p style="margin: 5px 0;"><strong>Contacto:</strong> {solicitud.nombre_contacto}</p>
+                            <p style="margin: 5px 0;"><strong>Correo:</strong> {solicitud.email}</p>
+                            <p style="margin: 5px 0;"><strong>Teléfono:</strong> {solicitud.telefono}</p>
+                            <p style="margin: 5px 0;"><strong>Plan Elegido:</strong> Plan {solicitud.plan}</p>
+                            <p style="margin: 5px 0;"><strong>Mensaje:</strong> {solicitud.mensaje or 'Ninguno'}</p>
+                        </div>
+                    </div>
+                </div>
+                """
+            }
+            requests.post(url, json=payload, headers=headers)
+        except Exception as e:
+            print(f"Excepción al enviar correo de contacto vía Brevo: {e}")
+
         return Response(
             {"mensaje": "Solicitud guardada correctamente en la base de datos."}, 
             status=status.HTTP_201_CREATED
